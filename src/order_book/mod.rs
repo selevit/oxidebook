@@ -1,30 +1,10 @@
 use rbtree::RBTree;
 use std::cmp::{Ord, Ordering, PartialEq, PartialOrd};
-use std::error::Error;
-use std::fmt;
 use std::vec::Vec;
 
 #[derive(Debug)]
 pub enum PlacingError {
     Cancelled,
-}
-
-impl fmt::Display for PlacingError {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "Order placing error")
-    }
-}
-
-impl Error for PlacingError {
-    fn description(&self) -> &str {
-        match self {
-            PlacingError::Cancelled => "The order has been cancelled",
-            _ => "Unknown order placing error",
-        }
-    }
-    fn source(&self) -> Option<&(dyn Error + 'static)> {
-        None
-    }
 }
 
 #[derive(PartialEq, Debug, Clone, Copy, Eq, PartialOrd)]
