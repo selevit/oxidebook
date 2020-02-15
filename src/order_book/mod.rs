@@ -42,26 +42,22 @@ struct TreeKey {
 
 impl Ord for TreeKey {
     fn cmp(&self, other: &TreeKey) -> Ordering {
-        return match self.side {
+        match self.side {
             Side::Buy => {
-                if self.price < other.price {
-                    Ordering::Greater
-                } else if self.price > other.price {
-                    Ordering::Less
-                } else {
-                    self.seq_id.cmp(&other.seq_id)
+                match self.price.cmp(&other.price) {
+                    Ordering::Less => Ordering::Greater,
+                    Ordering::Greater => Ordering::Less,
+                    _ => self.seq_id.cmp(&other.seq_id),
                 }
             }
             Side::Sell => {
-                if self.price < other.price {
-                    Ordering::Less
-                } else if self.price > other.price {
-                    Ordering::Greater
-                } else {
-                    self.seq_id.cmp(&other.seq_id)
+                match self.price.cmp(&other.price) {
+                    Ordering::Less => Ordering::Less,
+                    Ordering::Greater => Ordering::Greater,
+                    _ => self.seq_id.cmp(&other.seq_id),
                 }
             }
-        };
+        }
     }
 }
 
@@ -90,11 +86,11 @@ pub struct Order {
 
 impl Order {
     fn tree_key(&self) -> TreeKey {
-        return TreeKey {
+        TreeKey {
             side: self.side,
             price: self.price,
             seq_id: self.seq_id,
-        };
+        }
     }
 }
 
