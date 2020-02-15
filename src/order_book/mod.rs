@@ -22,17 +22,12 @@ struct TreeKey {
 
 impl Ord for TreeKey {
     fn cmp(&self, other: &TreeKey) -> Ordering {
-        match self.side {
-            Side::Buy => match self.price.cmp(&other.price) {
-                Ordering::Less => Ordering::Greater,
-                Ordering::Greater => Ordering::Less,
-                Ordering::Equal => self.seq_id.cmp(&other.seq_id),
-            },
-            Side::Sell => match self.price.cmp(&other.price) {
-                Ordering::Less => Ordering::Less,
-                Ordering::Greater => Ordering::Greater,
-                Ordering::Equal => self.seq_id.cmp(&other.seq_id),
-            },
+        let cmp_result = self.price.cmp(&other.price);
+        match (self.side, cmp_result)  {
+            (Side::Buy, Ordering::Greater) => Ordering::Less,
+            (Side::Buy, Ordering::Less) => Ordering::Greater,
+            (_, Ordering::Equal) => self.seq_id.cmp(&other.seq_id),
+            _ => cmp_result,
         }
     }
 }
@@ -98,11 +93,9 @@ impl OrderBook {
         let mut removed_orders: Vec<TreeKey> = Vec::new();
 
         for (key, maker_order) in maker_side.iter_mut() {
-            if order.side == Side::Sell && order.price > maker_order.price {
-                break;
-            }
-            if order.side == Side::Buy && order.price < maker_order.price {
-                break;
+            match (order.side, order.price.cmp(&maker_order.price)) {
+                (Side::Sell, Ordering::Greater) | (Side::Buy, Ordering::Less) => break,
+                _ => {},
             }
 
             let original_taker_order = order;
@@ -123,11 +116,11 @@ impl OrderBook {
         if order.volume > 0 {
             taker_side.insert(order.tree_key(), order);
         }
-
+    
         for k in &removed_orders {
             maker_side.remove(&k);
         }
-
+    
         Ok(deals)
     }
 }
