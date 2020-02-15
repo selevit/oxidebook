@@ -26,12 +26,12 @@ impl Ord for TreeKey {
             Side::Buy => match self.price.cmp(&other.price) {
                 Ordering::Less => Ordering::Greater,
                 Ordering::Greater => Ordering::Less,
-                _ => self.seq_id.cmp(&other.seq_id),
+                Ordering::Equal => self.seq_id.cmp(&other.seq_id),
             },
             Side::Sell => match self.price.cmp(&other.price) {
                 Ordering::Less => Ordering::Less,
                 Ordering::Greater => Ordering::Greater,
-                _ => self.seq_id.cmp(&other.seq_id),
+                Ordering::Equal => self.seq_id.cmp(&other.seq_id),
             },
         }
     }
