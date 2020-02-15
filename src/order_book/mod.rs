@@ -27,12 +27,6 @@ impl Error for PlacingError {
     }
 }
 
-#[derive(Debug)]
-pub struct OrderBook {
-    buy: OrderBookSide,
-    sell: OrderBookSide,
-}
-
 #[derive(PartialEq, Debug, Clone, Copy)]
 pub enum Side {
     Buy,
@@ -40,33 +34,14 @@ pub enum Side {
 }
 
 #[derive(Debug, Clone, Copy)]
-pub struct Order {
-    pub side: Side,
-    pub price: u64,
-    pub volume: u64,
-    pub seq_id: u64,
-    pub user_id: u64,
-}
-
-impl Order {
-    fn tree_key(&self) -> OrderTreeKey {
-        return OrderTreeKey {
-            side: self.side,
-            price: self.price,
-            seq_id: self.seq_id,
-        };
-    }
-}
-
-#[derive(Debug, Clone, Copy)]
-struct OrderTreeKey {
+struct TreeKey {
     side: Side,
     price: u64,
     seq_id: u64,
 }
 
-impl Ord for OrderTreeKey {
-    fn cmp(&self, other: &OrderTreeKey) -> Ordering {
+impl Ord for TreeKey {
+    fn cmp(&self, other: &TreeKey) -> Ordering {
         return match self.side {
             Side::Buy => {
                 if self.price < other.price {
@@ -90,17 +65,36 @@ impl Ord for OrderTreeKey {
     }
 }
 
-impl Eq for OrderTreeKey {}
+impl Eq for TreeKey {}
 
-impl PartialEq for OrderTreeKey {
-    fn eq(&self, other: &OrderTreeKey) -> bool {
+impl PartialEq for TreeKey {
+    fn eq(&self, other: &TreeKey) -> bool {
         self.side == other.side && self.price == other.price && self.seq_id == other.seq_id
     }
 }
 
-impl PartialOrd for OrderTreeKey {
-    fn partial_cmp(&self, other: &OrderTreeKey) -> Option<Ordering> {
+impl PartialOrd for TreeKey {
+    fn partial_cmp(&self, other: &TreeKey) -> Option<Ordering> {
         Some(self.cmp(other))
+    }
+}
+
+#[derive(Debug, Clone, Copy)]
+pub struct Order {
+    pub side: Side,
+    pub price: u64,
+    pub volume: u64,
+    pub seq_id: u64,
+    pub user_id: u64,
+}
+
+impl Order {
+    fn tree_key(&self) -> TreeKey {
+        return TreeKey {
+            side: self.side,
+            price: self.price,
+            seq_id: self.seq_id,
+        };
     }
 }
 
@@ -122,40 +116,31 @@ impl Deal {
 }
 
 #[derive(Debug)]
-struct OrderBookSide {
-    orders: RBTree<OrderTreeKey, Order>,
-}
-
-impl OrderBookSide {
-    fn new() -> OrderBookSide {
-        let orders = RBTree::new();
-        OrderBookSide { orders: orders }
-    }
+pub struct OrderBook {
+    buy_levels: RBTree<TreeKey, Order>,
+    sell_levels: RBTree<TreeKey, Order>,
 }
 
 impl OrderBook {
     pub fn new() -> OrderBook {
-        let buy = OrderBookSide::new();
-        let sell = OrderBookSide::new();
-        let orderbook = OrderBook {
-            buy: buy,
-            sell: sell,
-        };
-        orderbook
+        OrderBook {
+            buy_levels: RBTree::new(),
+            sell_levels: RBTree::new(),
+        }
     }
 
     pub fn place(&mut self, order: Order) -> Result<Vec<Deal>, PlacingError> {
         let (taker_side, maker_side) = match order.side {
-            Side::Buy => (&mut self.buy, &mut self.sell),
-            Side::Sell => (&mut self.sell, &mut self.buy),
+            Side::Buy => (&mut self.buy_levels, &mut self.sell_levels),
+            Side::Sell => (&mut self.sell_levels, &mut self.buy_levels),
             _ => unreachable!(),
         };
 
-        let mut deals: Vec<Deal> = Vec::new();
         let mut order = order;
-        let mut removed_orders: Vec<OrderTreeKey> = Vec::new();
+        let mut deals: Vec<Deal> = Vec::new();
+        let mut removed_orders: Vec<TreeKey> = Vec::new();
 
-        for (key, maker_order) in maker_side.orders.iter_mut() {
+        for (key, maker_order) in maker_side.iter_mut() {
             if order.side == Side::Buy && order.price > maker_order.price {
                 break;
             }
@@ -184,11 +169,11 @@ impl OrderBook {
         }
 
         if order.volume > 0 {
-            taker_side.orders.insert(order.tree_key(), order);
+            taker_side.insert(order.tree_key(), order);
         }
 
         for k in &removed_orders {
-            maker_side.orders.remove(&k);
+            maker_side.remove(&k);
         }
 
         Ok(deals)
