@@ -91,7 +91,6 @@ impl OrderBook {
         let (taker_side, maker_side) = match order.side {
             Side::Buy => (&mut self.buy_levels, &mut self.sell_levels),
             Side::Sell => (&mut self.sell_levels, &mut self.buy_levels),
-            _ => unreachable!(),
         };
 
         let mut order = order;
@@ -99,20 +98,15 @@ impl OrderBook {
         let mut removed_orders: Vec<TreeKey> = Vec::new();
 
         for (key, maker_order) in maker_side.iter_mut() {
-            if order.side == Side::Buy && order.price > maker_order.price {
+            if order.side == Side::Sell && order.price > maker_order.price {
                 break;
             }
             if order.side == Side::Buy && order.price < maker_order.price {
                 break;
             }
 
-            let deal_volume = if maker_order.volume < order.volume {
-                maker_order.volume
-            } else {
-                order.volume
-            };
-
             let original_taker_order = order;
+            let deal_volume = std::cmp::min(maker_order.volume, order.volume);
             deals.push(Deal::new(original_taker_order, *maker_order, deal_volume));
 
             order.volume -= deal_volume;
