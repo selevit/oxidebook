@@ -27,13 +27,13 @@ impl Error for PlacingError {
     }
 }
 
-#[derive(PartialEq, Debug, Clone, Copy)]
+#[derive(PartialEq, Debug, Clone, Copy, Eq, PartialOrd)]
 pub enum Side {
     Buy,
     Sell,
 }
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, Eq, PartialEq, PartialOrd)]
 struct TreeKey {
     side: Side,
     price: u64,
@@ -43,35 +43,17 @@ struct TreeKey {
 impl Ord for TreeKey {
     fn cmp(&self, other: &TreeKey) -> Ordering {
         match self.side {
-            Side::Buy => {
-                match self.price.cmp(&other.price) {
-                    Ordering::Less => Ordering::Greater,
-                    Ordering::Greater => Ordering::Less,
-                    _ => self.seq_id.cmp(&other.seq_id),
-                }
-            }
-            Side::Sell => {
-                match self.price.cmp(&other.price) {
-                    Ordering::Less => Ordering::Less,
-                    Ordering::Greater => Ordering::Greater,
-                    _ => self.seq_id.cmp(&other.seq_id),
-                }
-            }
+            Side::Buy => match self.price.cmp(&other.price) {
+                Ordering::Less => Ordering::Greater,
+                Ordering::Greater => Ordering::Less,
+                _ => self.seq_id.cmp(&other.seq_id),
+            },
+            Side::Sell => match self.price.cmp(&other.price) {
+                Ordering::Less => Ordering::Less,
+                Ordering::Greater => Ordering::Greater,
+                _ => self.seq_id.cmp(&other.seq_id),
+            },
         }
-    }
-}
-
-impl Eq for TreeKey {}
-
-impl PartialEq for TreeKey {
-    fn eq(&self, other: &TreeKey) -> bool {
-        self.side == other.side && self.price == other.price && self.seq_id == other.seq_id
-    }
-}
-
-impl PartialOrd for TreeKey {
-    fn partial_cmp(&self, other: &TreeKey) -> Option<Ordering> {
-        Some(self.cmp(other))
     }
 }
 
