@@ -23,7 +23,7 @@ struct TreeKey {
 impl Ord for TreeKey {
     fn cmp(&self, other: &TreeKey) -> Ordering {
         let cmp_result = self.price.cmp(&other.price);
-        match (self.side, cmp_result)  {
+        match (self.side, cmp_result) {
             (Side::Buy, Ordering::Greater) => Ordering::Less,
             (Side::Buy, Ordering::Less) => Ordering::Greater,
             (_, Ordering::Equal) => self.seq_id.cmp(&other.seq_id),
@@ -37,16 +37,15 @@ pub struct Order {
     pub side: Side,
     pub price: u64,
     pub volume: u64,
-    pub seq_id: u64,
     pub user_id: u64,
 }
 
 impl Order {
-    fn tree_key(&self) -> TreeKey {
+    fn _tree_key(&self, seq_id: u64) -> TreeKey {
         TreeKey {
             side: self.side,
             price: self.price,
-            seq_id: self.seq_id,
+            seq_id: seq_id,
         }
     }
 }
@@ -70,6 +69,7 @@ impl Deal {
 
 #[derive(Debug)]
 pub struct OrderBook {
+    next_seq_id: u64,
     buy_levels: RBTree<TreeKey, Order>,
     sell_levels: RBTree<TreeKey, Order>,
 }
@@ -77,6 +77,7 @@ pub struct OrderBook {
 impl OrderBook {
     pub fn new() -> OrderBook {
         OrderBook {
+            next_seq_id: 0,
             buy_levels: RBTree::new(),
             sell_levels: RBTree::new(),
         }
@@ -95,7 +96,7 @@ impl OrderBook {
         for (key, maker_order) in maker_side.iter_mut() {
             match (order.side, order.price.cmp(&maker_order.price)) {
                 (Side::Sell, Ordering::Greater) | (Side::Buy, Ordering::Less) => break,
-                _ => {},
+                _ => {}
             }
 
             let original_taker_order = order;
@@ -114,13 +115,14 @@ impl OrderBook {
         }
 
         if order.volume > 0 {
-            taker_side.insert(order.tree_key(), order);
+            taker_side.insert(order._tree_key(self.next_seq_id), order);
+            self.next_seq_id += 1
         }
-    
+
         for k in &removed_orders {
             maker_side.remove(&k);
         }
-    
+
         Ok(deals)
     }
 }

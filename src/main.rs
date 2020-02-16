@@ -8,14 +8,12 @@ fn main() {
         side: Side::Buy,
         price: 1000,
         volume: 10,
-        seq_id: 1,
         user_id: 1,
     };
     let buy_order2 = Order {
         side: Side::Buy,
         price: 1001,
         volume: 5,
-        seq_id: 2,
         user_id: 1,
     };
 
@@ -23,7 +21,6 @@ fn main() {
         side: Side::Sell,
         price: 1000,
         volume: 22,
-        seq_id: 3,
         user_id: 2,
     };
 
