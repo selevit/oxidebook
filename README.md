@@ -2,8 +2,8 @@
 
 The implementation of trading order book in Rust.
 
-How to run:
+Run tests:
 
 ```
-cargo run
+cargo test
 ```
