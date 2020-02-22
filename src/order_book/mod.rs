@@ -100,7 +100,11 @@ impl Default for OrderBook {
 impl OrderBook {
     /// Creates new empty order book
     pub fn new() -> Self {
-        OrderBook { next_seq_id: 0, buy_levels: RBTree::new(), sell_levels: RBTree::new() }
+        OrderBook {
+            next_seq_id: 0,
+            buy_levels: RBTree::new(),
+            sell_levels: RBTree::new(),
+        }
     }
 
     /// Creates a new orderbook with predefined orders.
@@ -138,13 +142,18 @@ impl OrderBook {
 
         for (key, maker_order) in maker_side.iter_mut() {
             match (order.side, order.price.cmp(&maker_order.price)) {
-                (Side::Sell, Ordering::Greater) | (Side::Buy, Ordering::Less) => break,
+                (Side::Sell, Ordering::Greater)
+                | (Side::Buy, Ordering::Less) => break,
                 _ => {}
             }
 
             let original_taker_order = order;
             let deal_volume = std::cmp::min(maker_order.volume, order.volume);
-            deals.push(Deal::new(original_taker_order, *maker_order, deal_volume));
+            deals.push(Deal::new(
+                original_taker_order,
+                *maker_order,
+                deal_volume,
+            ));
 
             order.volume -= deal_volume;
             maker_order.volume -= deal_volume;
