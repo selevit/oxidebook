@@ -1,27 +1,24 @@
+//! An implementation of a trading order book.
+//!
+//! Provides structures and methods for matching and filling exchange orders.
 use rbtree::RBTree;
 use std::cmp::{Ord, Ordering, PartialEq, PartialOrd};
 use std::vec::Vec;
 
-///
 /// An error which can occur when placing an order
-///
 #[derive(Debug)]
 pub enum PlacingError {
     Cancelled,
 }
 
-///
 /// A side of the exchange order book (buy or sell)
-///
 #[derive(PartialEq, Debug, Clone, Copy, Eq, PartialOrd)]
 pub enum Side {
     Buy,
     Sell,
 }
 
-///
 /// An order key in the RBTree which is used for storing orders in the correct order.
-///
 #[derive(Debug, Clone, Copy, Eq, PartialEq, PartialOrd)]
 struct TreeKey {
     side: Side,
@@ -29,11 +26,10 @@ struct TreeKey {
     seq_id: u64,
 }
 
-///
 /// Buy orders with higher price go first.
+///
 /// Sell orders with higher price go last.
 /// If prices are equal, we order by sequence id (placing ordering).
-///
 impl Ord for TreeKey {
     fn cmp(&self, other: &TreeKey) -> Ordering {
         let cmp_result = self.price.cmp(&other.price);
@@ -46,10 +42,9 @@ impl Ord for TreeKey {
     }
 }
 
-///
 /// An exchange order for buying or selling assets.
-/// All prices and volumes are present as integers in base values (e.g. Satoshi or Wei)
 ///
+/// All prices and volumes are present as integers in base values (e.g. Satoshi or Wei)
 #[derive(Debug, Clone, Copy, Eq, PartialEq)]
 pub struct Order {
     pub side: Side,
@@ -64,10 +59,9 @@ impl Order {
     }
 }
 
-///
 /// A deal which is the result of orders filling.
-/// Stores the state of taker and maker orders before the deal.
 ///
+/// Stores the state of taker and maker orders before the deal.
 #[derive(Debug, Eq, PartialEq)]
 pub struct Deal {
     taker_order: Order,
@@ -81,10 +75,9 @@ impl Deal {
     }
 }
 
+/// A trading order book.
 ///
-/// A trading order book which provides the functionality
-/// for matching and filling exchange orders.
-///
+/// Provides the functionality for matching and filling exchange orders.
 #[derive(Debug)]
 pub struct OrderBook {
     next_seq_id: u64,
@@ -99,18 +92,15 @@ impl Default for OrderBook {
 }
 
 impl OrderBook {
-    ///
     /// Creates new empty order book
-    ///
     pub fn new() -> Self {
         OrderBook { next_seq_id: 0, buy_levels: RBTree::new(), sell_levels: RBTree::new() }
     }
 
-    ///
     /// Places the order to the order book and tries to match it with existing orders.
+    ///
     /// Returns a list of deals if filling occured.
     /// Returns an error if the order cannot be placed.
-    ///
     pub fn place(&mut self, order: Order) -> Result<Vec<Deal>, PlacingError> {
         let (taker_side, maker_side) = match order.side {
             Side::Buy => (&mut self.buy_levels, &mut self.sell_levels),
