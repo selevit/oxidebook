@@ -30,15 +30,13 @@ struct TreeKey {
 /// Buy orders with higher price go first.
 ///
 /// Sell orders with higher price go last.
-/// If prices are equal, we order by sequence id (placing ordering).
+/// If prices are equal, we order them by sequence id (placing ordering).
 impl Ord for TreeKey {
     fn cmp(&self, other: &TreeKey) -> Ordering {
-        let cmp_result = self.price.cmp(&other.price);
-        match (self.side, cmp_result) {
-            (Side::Buy, Ordering::Greater) => Ordering::Less,
-            (Side::Buy, Ordering::Less) => Ordering::Greater,
-            (_, Ordering::Equal) => self.seq_id.cmp(&other.seq_id),
-            _ => cmp_result,
+        match self.price.cmp(&other.price) {
+            Ordering::Equal => self.seq_id.cmp(&other.seq_id),
+            cmp if self.side == Side::Sell => cmp,
+            cmp => cmp.reverse(),
         }
     }
 }
