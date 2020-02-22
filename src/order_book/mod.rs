@@ -3,6 +3,7 @@
 //! Provides structures and methods for matching and filling exchange orders.
 use rbtree::RBTree;
 use std::cmp::{Ord, Ordering, PartialEq, PartialOrd};
+use std::error::Error;
 use std::vec::Vec;
 
 /// An error which can occur when placing an order
@@ -54,6 +55,11 @@ pub struct Order {
 }
 
 impl Order {
+    /// Creates new IoC order.
+    pub fn new(side: Side, price: u64, volume: u64, user_id: u64) -> Self {
+        Order { side, price, volume, user_id }
+    }
+
     fn _tree_key(&self, seq_id: u64) -> TreeKey {
         TreeKey { side: self.side, price: self.price, seq_id }
     }
@@ -95,6 +101,25 @@ impl OrderBook {
     /// Creates new empty order book
     pub fn new() -> Self {
         OrderBook { next_seq_id: 0, buy_levels: RBTree::new(), sell_levels: RBTree::new() }
+    }
+
+    /// Creates a new orderbook with predefined orders.
+    ///
+    /// Returns an error if some of passed orders can be filled.
+    pub fn new_with_orders(orders: Vec<Order>) -> Result<Self, Box<dyn Error>> {
+        let mut book = Self::new();
+
+        for order in orders {
+            match book.place(order) {
+                Ok(deals) if !deals.is_empty() => {
+                    return Err("Cannot construct the orderbook with orders which match between each other".into())
+                }
+                Err(e) => return Err(format!("An error occurred while placing some of the orders: {:?}", e).into()),
+                Ok(_) => {}
+            };
+        }
+
+        Ok(book)
     }
 
     /// Places the order to the order book and tries to match it with existing orders.

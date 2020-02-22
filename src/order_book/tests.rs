@@ -2,36 +2,18 @@ use super::{Deal, Order, OrderBook, Side};
 
 #[test]
 fn simple_matching() {
-    let mut order_book = OrderBook::new();
-    let buy_order1 = Order { side: Side::Buy, price: 1000, volume: 10, user_id: 1 };
-    assert_eq!(order_book.place(buy_order1).unwrap().len(), 0);
+    let maker_order = Order::new(Side::Sell, 4500, 7, 1);
+    let taker_order = Order::new(Side::Buy, 4900, 20, 2);
+    let expected_deal = Deal { taker_order, maker_order, volume: 7 };
+    let remaining_buy = Order::new(Side::Buy, 4900, 13, 2);
 
-    let buy_order2 = Order { side: Side::Buy, price: 1001, volume: 5, user_id: 1 };
-    assert_eq!(order_book.place(buy_order2).unwrap().len(), 0);
+    let mut book = OrderBook::new_with_orders(vec![maker_order]).unwrap();
+    let deals = book.place(taker_order).unwrap();
+    assert_eq!(deals.len(), 1);
+    assert_eq!(deals[0], expected_deal);
+    assert_eq!(book.sell_levels.len(), 0);
+    assert_eq!(book.buy_levels.len(), 1);
 
-    let sell_order1 = Order { side: Side::Sell, price: 1000, volume: 22, user_id: 2 };
-    let deals = order_book.place(sell_order1).unwrap();
-
-    assert_eq!(deals.len(), 2);
-
-    assert_eq!(
-        deals[0],
-        Deal {
-            taker_order: Order { side: Side::Sell, price: 1000, volume: 22, user_id: 2 },
-            maker_order: Order { side: Side::Buy, price: 1001, volume: 5, user_id: 1 },
-            volume: 5,
-        }
-    );
-
-    assert_eq!(
-        deals[1],
-        Deal {
-            taker_order: Order { side: Side::Sell, price: 1000, volume: 17, user_id: 2 },
-            maker_order: Order { side: Side::Buy, price: 1000, volume: 10, user_id: 1 },
-            volume: 10,
-        }
-    );
-
-    assert_eq!(order_book.buy_levels.len(), 0);
-    assert_eq!(order_book.sell_levels.len(), 1);
+    let buys: Vec<&Order> = book.buy_levels.values().collect();
+    assert_eq!(buys[0], &remaining_buy);
 }
