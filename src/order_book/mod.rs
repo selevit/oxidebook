@@ -2,7 +2,7 @@
 //!
 //! Provides structures and methods for matching and filling exchange orders.
 use rbtree::RBTree;
-use std::cmp::{Ord, Ordering, PartialEq, PartialOrd};
+use std::cmp::{min, Ord, Ordering, PartialEq, PartialOrd};
 use std::error::Error;
 use std::vec::Vec;
 
@@ -73,12 +73,6 @@ pub struct Deal {
     volume: u64,
 }
 
-impl Deal {
-    fn new(taker_order: Order, maker_order: Order, volume: u64) -> Deal {
-        Deal { taker_order, maker_order, volume }
-    }
-}
-
 /// A trading order book.
 ///
 /// Provides the functionality for matching and filling exchange orders.
@@ -139,38 +133,37 @@ impl OrderBook {
         let mut removed_orders: Vec<TreeKey> = Vec::new();
 
         for (key, maker_order) in maker_side.iter_mut() {
-            match (order.side, order.price.cmp(&maker_order.price)) {
-                (Side::Sell, Ordering::Greater)
-                | (Side::Buy, Ordering::Less) => break,
+            match order.price.cmp(&maker_order.price) {
+                Ordering::Less if order.side == Side::Buy => break,
+                Ordering::Greater if order.side == Side::Sell => break,
                 _ => {}
             }
 
-            let original_taker_order = order;
-            let deal_volume = std::cmp::min(maker_order.volume, order.volume);
-            deals.push(Deal::new(
-                original_taker_order,
-                *maker_order,
-                deal_volume,
-            ));
+            let deal_volume = min(maker_order.volume, order.volume);
+            deals.push(Deal {
+                taker_order: order,
+                maker_order: *maker_order,
+                volume: deal_volume,
+            });
 
-            order.volume -= deal_volume;
             maker_order.volume -= deal_volume;
-
             if maker_order.volume == 0 {
                 removed_orders.push(*key);
             }
+
+            order.volume -= deal_volume;
             if order.volume == 0 {
                 break;
             }
         }
 
-        if order.volume > 0 {
-            taker_side.insert(order._tree_key(self.next_seq_id), order);
-            self.next_seq_id += 1
-        }
-
         for k in &removed_orders {
             maker_side.remove(&k);
+        }
+
+        if order.volume != 0 {
+            taker_side.insert(order._tree_key(self.next_seq_id), order);
+            self.next_seq_id += 1
         }
 
         Ok(deals)
