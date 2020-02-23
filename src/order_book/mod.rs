@@ -49,13 +49,12 @@ pub struct Order {
     pub side: Side,
     pub price: u64,
     pub volume: u64,
-    pub user_id: u64,
 }
 
 impl Order {
     /// Creates new IoC order.
-    pub fn new(side: Side, price: u64, volume: u64, user_id: u64) -> Self {
-        Order { side, price, volume, user_id }
+    pub fn new(side: Side, price: u64, volume: u64) -> Self {
+        Order { side, price, volume }
     }
 
     fn _tree_key(&self, seq_id: u64) -> TreeKey {
