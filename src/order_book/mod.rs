@@ -128,9 +128,9 @@ impl OrderBook {
             Side::Sell => (&mut self.sell_levels, &mut self.buy_levels),
         };
 
-        let mut order = order;
-        let mut deals: Vec<Deal> = Vec::new();
         let mut removed_orders: Vec<TreeKey> = Vec::new();
+        let mut deals: Vec<Deal> = Vec::new();
+        let mut order = order;
 
         for (key, maker_order) in maker_side.iter_mut() {
             match order.price.cmp(&maker_order.price) {
@@ -163,7 +163,7 @@ impl OrderBook {
 
         if order.volume != 0 {
             taker_side.insert(order._tree_key(self.next_seq_id), order);
-            self.next_seq_id += 1
+            self.next_seq_id += 1;
         }
 
         Ok(deals)
