@@ -101,7 +101,7 @@ fn place_sell_order_and_fill_it_partially_exceeding_buys() {
     let placed_order = Order::sell(4800, 10);
     let expected_deals =
         vec![Deal { taker_order: placed_order, maker_order, volume: 9 }];
-    let remaining_sells = vec![Order::sell(4800, 1)];
+    let remaining_sells = vec![placed_order.with_volume(1)];
     let remaining_buys = vec![];
 
     TestCase {
@@ -124,15 +124,15 @@ fn place_sell_order_without_filling() {
         Order::sell(5400, 300),
     ];
     let mut initial_orders = initial_buys.clone();
-    initial_orders.extend(initial_sells);
+    initial_orders.extend(initial_sells.iter().cloned());
 
     let placed_order = Order::sell(5250, 15);
     let remaining_buys = initial_buys;
     let remaining_sells = vec![
         placed_order,
-        Order::sell(5300, 100),
-        Order::sell(5350, 200),
-        Order::sell(5400, 300),
+        initial_sells[0],
+        initial_sells[1],
+        initial_sells[2],
     ];
 
     TestCase {
@@ -151,7 +151,7 @@ fn place_buy_order_and_fill_it_partially_exceeding_sells() {
     let placed_order = Order::buy(4900, 20);
     let expected_deals =
         vec![Deal { taker_order: placed_order, maker_order, volume: 7 }];
-    let remaining_buys = vec![Order::buy(4900, 13)];
+    let remaining_buys = vec![placed_order.with_volume(13)];
     let remaining_sells = vec![];
 
     TestCase {

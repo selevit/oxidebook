@@ -5,6 +5,7 @@ use rbtree::RBTree;
 use std::cmp::{min, Ord, Ordering, PartialEq, PartialOrd};
 use std::error::Error;
 use std::vec::Vec;
+use uuid::Uuid;
 
 /// An error which can occur when placing an order
 #[derive(Debug)]
@@ -46,6 +47,7 @@ impl Ord for TreeKey {
 /// All prices and volumes are present as integers in base values (e.g. Satoshi or Wei)
 #[derive(Debug, Clone, Copy, Eq, PartialEq)]
 pub struct Order {
+    pub id: Uuid,
     pub side: Side,
     pub price: u64,
     pub volume: u64,
@@ -54,7 +56,7 @@ pub struct Order {
 impl Order {
     /// Creates new IoC order.
     pub fn new(side: Side, price: u64, volume: u64) -> Self {
-        Order { side, price, volume }
+        Order { id: Uuid::new_v4(), side, price, volume }
     }
 
     fn _tree_key(&self, seq_id: u64) -> TreeKey {

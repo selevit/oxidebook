@@ -8,3 +8,4 @@ edition = "2018"
 
 [dependencies]
 rbtree = "0.1.5"
+uuid = { version = "0.8", features = ["v4"] }
