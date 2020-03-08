@@ -3,7 +3,9 @@
 //! Provides structures and methods for matching and filling exchange orders.
 use rbtree::RBTree;
 use std::cmp::{min, Ord, Ordering, PartialEq, PartialOrd};
+use std::collections::HashMap;
 use std::error::Error;
+use std::option::Option;
 use std::vec::Vec;
 use uuid::Uuid;
 
@@ -82,6 +84,7 @@ pub struct OrderBook {
     next_seq_id: u64,
     buy_levels: RBTree<TreeKey, Order>,
     sell_levels: RBTree<TreeKey, Order>,
+    by_uuid: HashMap<Uuid, TreeKey>,
 }
 
 impl Default for OrderBook {
@@ -97,6 +100,7 @@ impl OrderBook {
             next_seq_id: 0,
             buy_levels: RBTree::new(),
             sell_levels: RBTree::new(),
+            by_uuid: HashMap::new(),
         }
     }
 
@@ -129,7 +133,7 @@ impl OrderBook {
             Side::Sell => (&mut self.sell_levels, &mut self.buy_levels),
         };
 
-        let mut removed_orders: Vec<TreeKey> = Vec::new();
+        let mut removed_orders: Vec<(TreeKey, Order)> = Vec::new();
         let mut deals: Vec<Deal> = Vec::new();
         let mut order = order;
 
@@ -149,7 +153,7 @@ impl OrderBook {
 
             maker_order.volume -= deal_volume;
             if maker_order.volume == 0 {
-                removed_orders.push(*key);
+                removed_orders.push((*key, *maker_order));
             }
 
             order.volume -= deal_volume;
@@ -158,16 +162,34 @@ impl OrderBook {
             }
         }
 
-        for k in &removed_orders {
-            maker_side.remove(&k);
+        for (key, order) in &removed_orders {
+            maker_side.remove(&key);
+            self.by_uuid.remove(&order.id);
         }
 
         if order.volume != 0 {
-            taker_side.insert(order._tree_key(self.next_seq_id), order);
+            let key = order._tree_key(self.next_seq_id);
+            taker_side.insert(key, order);
+            self.by_uuid.insert(order.id, key);
             self.next_seq_id += 1;
         }
 
         Ok(deals)
+    }
+
+    pub fn get_order(&self, id: Uuid) -> Option<&Order> {
+        match self.by_uuid.get(&id) {
+            Some(key) => {
+                let tree = if key.side == Side::Sell {
+                    &self.sell_levels
+                } else {
+                    &self.buy_levels
+                };
+                let order = tree.get(key).unwrap();
+                Some(order)
+            }
+            None => None,
+        }
     }
 }
 

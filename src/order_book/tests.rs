@@ -1,4 +1,5 @@
 use super::{Deal, Order, OrderBook, Side};
+use uuid::Uuid;
 
 struct TestCase {
     initial_orders: Vec<Order>,
@@ -221,4 +222,21 @@ fn place_buy_order_and_fill_it_partially_by_better_price_exceeding_sells() {
         remaining_sells,
     }
     .run()
+}
+
+#[test]
+fn get_order() {
+    let order1 = Order::sell(4500, 7);
+    let order2 = Order::buy(4400, 10);
+    let mut book = OrderBook::new_with_orders(vec![order1, order2]).unwrap();
+    assert_eq!(*book.get_order(order1.id).unwrap(), order1);
+    assert_eq!(*book.get_order(order2.id).unwrap(), order2);
+    assert_eq!(book.get_order(Uuid::new_v4()), None);
+
+    let order3 = Order::buy(4500, 7);
+    book.place(order3).unwrap();
+
+    assert_eq!(book.get_order(order1.id), None);
+    assert_eq!(book.get_order(order3.id), None);
+    assert_eq!(*book.get_order(order2.id).unwrap(), order2);
 }
