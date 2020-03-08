@@ -177,6 +177,7 @@ impl OrderBook {
         Ok(deals)
     }
 
+    // Returns the order by its id or None if it does not exist.
     pub fn get_order(&self, id: Uuid) -> Option<&Order> {
         match self.by_uuid.get(&id) {
             Some(key) => {
@@ -192,6 +193,7 @@ impl OrderBook {
         }
     }
 
+    // Changes the order volume by its id.
     pub fn change_order_volume(
         &mut self,
         order_id: Uuid,
@@ -211,6 +213,26 @@ impl OrderBook {
                 let mut new_order = *order;
                 new_order.volume = new_volume;
                 tree.replace_or_insert(*key, new_order);
+                Ok(())
+            }
+            None => Err("Order not found".into()),
+        }
+    }
+
+    // Cancels the order by its id.
+    pub fn cancel_order(
+        &mut self,
+        order_id: Uuid,
+    ) -> Result<(), Box<dyn Error>> {
+        match self.by_uuid.get(&order_id) {
+            Some(key) => {
+                let tree = if key.side == Side::Sell {
+                    &mut self.sell_levels
+                } else {
+                    &mut self.buy_levels
+                };
+                tree.remove(&key);
+                self.by_uuid.remove(&order_id);
                 Ok(())
             }
             None => Err("Order not found".into()),

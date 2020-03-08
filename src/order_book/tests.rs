@@ -256,3 +256,17 @@ fn change_order_volume() {
 
     book.change_order_volume(Uuid::new_v4(), 10).expect_err("Order not found");
 }
+
+#[test]
+fn cancel_order() {
+    let order1 = Order::sell(4500, 7);
+    let order2 = Order::buy(4400, 10);
+    let mut book = OrderBook::new_with_orders(vec![order1, order2]).unwrap();
+
+    book.cancel_order(order1.id).unwrap();
+    assert_eq!(book.get_order(order1.id), None);
+
+    book.cancel_order(Uuid::new_v4()).expect_err("Order not found");
+
+    assert_eq!(*book.get_order(order2.id).unwrap(), order2);
+}
