@@ -22,6 +22,15 @@ pub enum Side {
     Sell,
 }
 
+impl Side {
+    pub fn opposite(&self) -> Side {
+        match self {
+            Side::Buy => Side::Sell,
+            Side::Sell => Side::Buy,
+        }
+    }
+}
+
 /// An order key in the RBTree which is used for storing orders in the correct order.
 #[derive(Debug, Clone, Copy, Eq, PartialEq, PartialOrd)]
 struct TreeKey {
@@ -128,11 +137,7 @@ impl OrderBook {
     /// Returns a list of deals if filling occured.
     /// Returns an error if the order cannot be placed.
     pub fn place(&mut self, order: Order) -> Result<Vec<Deal>, PlacingError> {
-        let (taker_side, maker_side) = match order.side {
-            Side::Buy => (&mut self.buy_levels, &mut self.sell_levels),
-            Side::Sell => (&mut self.sell_levels, &mut self.buy_levels),
-        };
-
+        let maker_side = self._tree_mut(order.side.opposite());
         let mut removed_orders: Vec<(TreeKey, Order)> = Vec::new();
         let mut deals: Vec<Deal> = Vec::new();
         let mut order = order;
@@ -163,15 +168,10 @@ impl OrderBook {
         }
 
         for (key, order) in &removed_orders {
-            maker_side.remove(&key);
-            self.by_uuid.remove(&order.id);
+            self._remove_order(key, &order.id);
         }
-
         if order.volume != 0 {
-            let key = order._tree_key(self.next_seq_id);
-            taker_side.insert(key, order);
-            self.by_uuid.insert(order.id, key);
-            self.next_seq_id += 1;
+            self._add_order(&order);
         }
 
         Ok(deals)
@@ -181,13 +181,8 @@ impl OrderBook {
     pub fn get_order(&self, id: Uuid) -> Option<&Order> {
         match self.by_uuid.get(&id) {
             Some(key) => {
-                let tree = if key.side == Side::Sell {
-                    &self.sell_levels
-                } else {
-                    &self.buy_levels
-                };
-                let order = tree.get(key).unwrap();
-                Some(order)
+                let tree = self._tree(key.side);
+                Some(tree.get(key).unwrap())
             }
             None => None,
         }
@@ -204,15 +199,12 @@ impl OrderBook {
         }
         match self.by_uuid.get(&order_id) {
             Some(key) => {
-                let tree = if key.side == Side::Sell {
-                    &mut self.sell_levels
-                } else {
-                    &mut self.buy_levels
-                };
-                let order = tree.get(key).unwrap();
+                let key = *key;
+                let tree = self._tree_mut(key.side);
+                let order = tree.get(&key).unwrap();
                 let mut new_order = *order;
                 new_order.volume = new_volume;
-                tree.replace_or_insert(*key, new_order);
+                tree.replace_or_insert(key, new_order);
                 Ok(())
             }
             None => Err("Order not found".into()),
@@ -226,16 +218,39 @@ impl OrderBook {
     ) -> Result<(), Box<dyn Error>> {
         match self.by_uuid.get(&order_id) {
             Some(key) => {
-                let tree = if key.side == Side::Sell {
-                    &mut self.sell_levels
-                } else {
-                    &mut self.buy_levels
-                };
-                tree.remove(&key);
-                self.by_uuid.remove(&order_id);
+                let key = *key;
+                self._remove_order(&key, &order_id);
                 Ok(())
             }
             None => Err("Order not found".into()),
+        }
+    }
+
+    fn _add_order(&mut self, order: &Order) {
+        let key = order._tree_key(self.next_seq_id);
+        let tree = self._tree_mut(order.side);
+        tree.insert(key, *order);
+        self.by_uuid.insert(order.id, key);
+        self.next_seq_id += 1;
+    }
+
+    fn _remove_order(&mut self, key: &TreeKey, order_id: &Uuid) {
+        let tree = self._tree_mut(key.side);
+        tree.remove(key);
+        self.by_uuid.remove(order_id);
+    }
+
+    fn _tree(&self, side: Side) -> &RBTree<TreeKey, Order> {
+        match side {
+            Side::Sell => &self.sell_levels,
+            Side::Buy => &self.buy_levels,
+        }
+    }
+
+    fn _tree_mut(&mut self, side: Side) -> &mut RBTree<TreeKey, Order> {
+        match side {
+            Side::Sell => &mut self.sell_levels,
+            Side::Buy => &mut self.buy_levels,
         }
     }
 }
