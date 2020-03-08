@@ -240,3 +240,19 @@ fn get_order() {
     assert_eq!(book.get_order(order3.id), None);
     assert_eq!(*book.get_order(order2.id).unwrap(), order2);
 }
+
+#[test]
+fn change_order_volume() {
+    let order1 = Order::sell(4500, 7);
+    let order2 = Order::buy(4400, 10);
+    let mut book = OrderBook::new_with_orders(vec![order1, order2]).unwrap();
+
+    book.change_order_volume(order1.id, 25).unwrap();
+    assert_eq!(*book.get_order(order1.id).unwrap(), order1.with_volume(25));
+
+    book.change_order_volume(order2.id, 0)
+        .expect_err("New volume must be positive");
+    assert_eq!(*book.get_order(order2.id).unwrap(), order2);
+
+    book.change_order_volume(Uuid::new_v4(), 10).expect_err("Order not found");
+}

@@ -191,6 +191,31 @@ impl OrderBook {
             None => None,
         }
     }
+
+    pub fn change_order_volume(
+        &mut self,
+        order_id: Uuid,
+        new_volume: u64,
+    ) -> Result<(), Box<dyn Error>> {
+        if new_volume == 0 {
+            return Err("New volume must be positive".into());
+        }
+        match self.by_uuid.get(&order_id) {
+            Some(key) => {
+                let tree = if key.side == Side::Sell {
+                    &mut self.sell_levels
+                } else {
+                    &mut self.buy_levels
+                };
+                let order = tree.get(key).unwrap();
+                let mut new_order = *order;
+                new_order.volume = new_volume;
+                tree.replace_or_insert(*key, new_order);
+                Ok(())
+            }
+            None => Err("Order not found".into()),
+        }
+    }
 }
 
 #[cfg(test)]
