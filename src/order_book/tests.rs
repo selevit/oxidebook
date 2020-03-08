@@ -1,4 +1,6 @@
-use super::{Deal, Order, OrderBook, Side};
+use super::{
+    CancellingError, ChangeOrderVolumeError, Deal, Order, OrderBook, Side,
+};
 use uuid::Uuid;
 
 struct TestCase {
@@ -250,11 +252,17 @@ fn change_order_volume() {
     book.change_order_volume(order1.id, 25).unwrap();
     assert_eq!(*book.get_order(order1.id).unwrap(), order1.with_volume(25));
 
-    book.change_order_volume(order2.id, 0)
-        .expect_err("New volume must be positive");
+    assert_eq!(
+        book.change_order_volume(order2.id, 0).err(),
+        Some(ChangeOrderVolumeError::ZeroVolume)
+    );
+
     assert_eq!(*book.get_order(order2.id).unwrap(), order2);
 
-    book.change_order_volume(Uuid::new_v4(), 10).expect_err("Order not found");
+    assert_eq!(
+        book.change_order_volume(Uuid::new_v4(), 10).err(),
+        Some(ChangeOrderVolumeError::OrderNotFound)
+    );
 }
 
 #[test]
@@ -266,7 +274,10 @@ fn cancel_order() {
     book.cancel_order(order1.id).unwrap();
     assert_eq!(book.get_order(order1.id), None);
 
-    book.cancel_order(Uuid::new_v4()).expect_err("Order not found");
+    assert_eq!(
+        book.cancel_order(Uuid::new_v4()).err(),
+        Some(CancellingError::OrderNotFound)
+    );
 
     assert_eq!(*book.get_order(order2.id).unwrap(), order2);
 }

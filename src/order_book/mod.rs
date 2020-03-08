@@ -10,9 +10,22 @@ use std::vec::Vec;
 use uuid::Uuid;
 
 /// An error which can occur when placing an order
-#[derive(Debug)]
+#[derive(Debug, PartialEq, Eq)]
 pub enum PlacingError {
     Cancelled,
+}
+
+/// An error which can occur when cancelling an order
+#[derive(Debug, PartialEq, Eq)]
+pub enum CancellingError {
+    OrderNotFound,
+}
+
+/// An error which can occur when changing an order volume
+#[derive(Debug, PartialEq, Eq)]
+pub enum ChangeOrderVolumeError {
+    ZeroVolume,
+    OrderNotFound,
 }
 
 /// A side of the exchange order book (buy or sell)
@@ -137,12 +150,13 @@ impl OrderBook {
     /// Returns a list of deals if filling occured.
     /// Returns an error if the order cannot be placed.
     pub fn place(&mut self, order: Order) -> Result<Vec<Deal>, PlacingError> {
-        let maker_side = self._tree_mut(order.side.opposite());
         let mut removed_orders: Vec<(TreeKey, Order)> = Vec::new();
         let mut deals: Vec<Deal> = Vec::new();
         let mut order = order;
 
-        for (key, maker_order) in maker_side.iter_mut() {
+        for (key, maker_order) in
+            self._tree_mut(order.side.opposite()).iter_mut()
+        {
             match order.price.cmp(&maker_order.price) {
                 Ordering::Less if order.side == Side::Buy => break,
                 Ordering::Greater if order.side == Side::Sell => break,
@@ -193,9 +207,9 @@ impl OrderBook {
         &mut self,
         order_id: Uuid,
         new_volume: u64,
-    ) -> Result<(), Box<dyn Error>> {
+    ) -> Result<(), ChangeOrderVolumeError> {
         if new_volume == 0 {
-            return Err("New volume must be positive".into());
+            return Err(ChangeOrderVolumeError::ZeroVolume);
         }
         match self.by_uuid.get(&order_id) {
             Some(key) => {
@@ -207,7 +221,7 @@ impl OrderBook {
                 tree.replace_or_insert(key, new_order);
                 Ok(())
             }
-            None => Err("Order not found".into()),
+            None => Err(ChangeOrderVolumeError::OrderNotFound),
         }
     }
 
@@ -215,14 +229,14 @@ impl OrderBook {
     pub fn cancel_order(
         &mut self,
         order_id: Uuid,
-    ) -> Result<(), Box<dyn Error>> {
+    ) -> Result<(), CancellingError> {
         match self.by_uuid.get(&order_id) {
             Some(key) => {
                 let key = *key;
                 self._remove_order(&key, &order_id);
                 Ok(())
             }
-            None => Err("Order not found".into()),
+            None => Err(CancellingError::OrderNotFound),
         }
     }
 
