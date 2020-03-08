@@ -36,7 +36,7 @@ pub enum Side {
 }
 
 impl Side {
-    pub fn opposite(&self) -> Side {
+    pub fn opposite(self) -> Side {
         match self {
             Side::Buy => Side::Sell,
             Side::Sell => Side::Buy,
