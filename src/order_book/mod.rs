@@ -5,6 +5,7 @@ use rbtree::RBTree;
 use std::cmp::{min, Ord, Ordering, PartialEq, PartialOrd};
 use std::collections::HashMap;
 use std::error::Error;
+use std::fmt;
 use std::option::Option;
 use std::vec::Vec;
 use uuid::Uuid;
@@ -112,6 +113,43 @@ pub struct OrderBook {
 impl Default for OrderBook {
     fn default() -> Self {
         Self::new()
+    }
+}
+
+impl fmt::Display for OrderBook {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let buy_orders: Vec<&Order> = self.buy_levels.values().collect();
+        let sell_orders: Vec<&Order> = self.sell_levels.values().collect();
+        f.write_str("Buy\t\t\tSell\n\n").unwrap();
+        let mut x = 0;
+
+        for (buy, sell) in buy_orders.iter().zip(sell_orders.iter()) {
+            writeln!(
+                f,
+                "{} ({})\t\t{} ({})",
+                buy.price, buy.volume, sell.price, sell.volume,
+            )
+            .unwrap();
+            x += 1;
+        }
+
+        let lonely_side = if buy_orders.len() > sell_orders.len() {
+            buy_orders
+        } else {
+            sell_orders
+        };
+
+        for order in lonely_side.iter().skip(x) {
+            match order.side {
+                Side::Sell => {
+                    writeln!(f, "\t\t{} ({})", order.price, order.volume)
+                }
+                Side::Buy => writeln!(f, "{} ({})", order.price, order.volume),
+            }
+            .unwrap();
+        }
+
+        Ok(())
     }
 }
 
