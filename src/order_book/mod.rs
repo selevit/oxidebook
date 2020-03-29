@@ -110,12 +110,6 @@ pub struct OrderBook {
     by_uuid: HashMap<Uuid, TreeKey>,
 }
 
-impl Default for OrderBook {
-    fn default() -> Self {
-        Self::new()
-    }
-}
-
 impl fmt::Display for OrderBook {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         let buy_orders: Vec<&Order> = self.buy_levels.values().collect();
@@ -150,6 +144,12 @@ impl fmt::Display for OrderBook {
         }
 
         Ok(())
+    }
+}
+
+impl Default for OrderBook {
+    fn default() -> Self {
+        Self::new()
     }
 }
 
