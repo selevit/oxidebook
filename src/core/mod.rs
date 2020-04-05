@@ -20,11 +20,6 @@ pub enum AddPairError {
     AlreadyExists,
 }
 
-#[derive(Debug, PartialEq, Eq)]
-pub enum GetOrderBookError {
-    PairNotFound,
-}
-
 impl<'a> Default for Exchange<'_> {
     fn default() -> Self {
         Self::new()
@@ -34,16 +29,6 @@ impl<'a> Default for Exchange<'_> {
 impl<'a> Exchange<'a> {
     pub fn new() -> Self {
         Exchange { pairs: HashMap::new() }
-    }
-
-    pub fn get_order_book(
-        &mut self,
-        pair_name: &'a str,
-    ) -> Result<&mut OrderBook, GetOrderBookError> {
-        if let Some(order_book) = self.pairs.get_mut(pair_name) {
-            return Ok(order_book);
-        }
-        Err(GetOrderBookError::PairNotFound)
     }
 
     pub fn add_pair(&mut self, pair_name: &'a str) -> Result<(), AddPairError> {
