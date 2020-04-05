@@ -8,4 +8,9 @@ edition = "2018"
 
 [dependencies]
 rbtree = "0.1.5"
+lapin = "*"
+futures-executor = "*"
+futures-util = "*"
+env_logger = "*"
+log = "*"
 uuid = { version = "0.8", features = ["v4"] }
