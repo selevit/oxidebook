@@ -72,6 +72,7 @@ impl<'a> Exchange<'a> {
                 .await?;
 
             info!("Starting consuming inbox");
+
             consumer
                 .for_each(move |delivery| {
                     let delivery =
