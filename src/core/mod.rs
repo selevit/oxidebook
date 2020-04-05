@@ -3,7 +3,6 @@ use futures_executor::LocalPool;
 use futures_util::{future::FutureExt, stream::StreamExt};
 use std::collections::HashMap;
 
-use lapin;
 use lapin::{
     options::{BasicAckOptions, BasicConsumeOptions, QueueDeclareOptions},
     types::FieldTable,
