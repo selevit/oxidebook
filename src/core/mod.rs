@@ -70,8 +70,8 @@ impl<'a> Exchange<'a> {
                     FieldTable::default(),
                 )
                 .await?;
-            info!("Starting consuming inbox");
 
+            info!("Starting consuming inbox");
             consumer
                 .for_each(move |delivery| {
                     let delivery =
