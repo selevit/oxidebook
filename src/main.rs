@@ -20,11 +20,14 @@ async fn main() {
 
     match module {
         "core" => core::run(),
-        "rest-api" => rest_api::run().await,
+        "rest-api" => rest_api::run(),
         "all" => {
-            let t_core = thread::spawn(core::run);
-            rest_api::run().await;
-            t_core.join().expect("error in the core thread");
+            let mut threads = vec![];
+            threads.push(thread::spawn(core::run));
+            threads.push(thread::spawn(rest_api::run));
+            for t in threads {
+                t.join().unwrap();
+            }
         }
         _ => {
             eprintln!("Unsupported module: {}", module);

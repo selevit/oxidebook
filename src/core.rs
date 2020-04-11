@@ -1,5 +1,4 @@
 use crate::order_book::{Order, OrderBook, Side};
-use futures_executor::LocalPool;
 use futures_util::{future::FutureExt, stream::StreamExt};
 use std::collections::HashMap;
 
@@ -38,63 +37,58 @@ impl<'a> Exchange<'a> {
         Ok(())
     }
 
-    pub fn run(&mut self) -> lapin::Result<()> {
-        let mut executor = LocalPool::new();
+    pub async fn run(&mut self) -> lapin::Result<()> {
+        let addr = std::env::var("AQMP_ADDR")
+            .unwrap_or_else(|_| "amqp://127.0.0.1:5672/%2f".into());
 
-        executor.run_until(async {
-            let addr = std::env::var("AQMP_ADDR")
-                .unwrap_or_else(|_| "amqp://127.0.0.1:5672/%2f".into());
+        let conn =
+            Connection::connect(&addr, ConnectionProperties::default()).await?;
 
-            let conn =
-                Connection::connect(&addr, ConnectionProperties::default())
-                    .await?;
+        info!("Connected to RabbitMQ");
 
-            info!("Connected to RabbitMQ");
+        let consuming_channel = conn.create_channel().await?;
+        let inbox_queue = consuming_channel
+            .queue_declare(
+                "inbox",
+                QueueDeclareOptions::default(),
+                FieldTable::default(),
+            )
+            .await?;
 
-            let consuming_channel = conn.create_channel().await?;
-            let inbox_queue = consuming_channel
-                .queue_declare(
-                    "inbox",
-                    QueueDeclareOptions::default(),
-                    FieldTable::default(),
-                )
-                .await?;
+        let consumer = consuming_channel
+            .clone()
+            .basic_consume(
+                inbox_queue.name().as_str(),
+                "core",
+                BasicConsumeOptions::default(),
+                FieldTable::default(),
+            )
+            .await?;
 
-            let consumer = consuming_channel
-                .clone()
-                .basic_consume(
-                    inbox_queue.name().as_str(),
-                    "core",
-                    BasicConsumeOptions::default(),
-                    FieldTable::default(),
-                )
-                .await?;
+        info!("Starting consuming inbox");
 
-            info!("Starting consuming inbox");
+        consumer
+            .for_each(move |delivery| {
+                let delivery =
+                    delivery.expect("error caught in the inbox consumer");
 
-            consumer
-                .for_each(move |delivery| {
-                    let delivery =
-                        delivery.expect("error caught in the inbox consumer");
+                let order_book =
+                    self.pairs.get_mut("BTC_USD").expect("invalid pair");
 
-                    let order_book =
-                        self.pairs.get_mut("BTC_USD").expect("invalid pair");
+                order_book
+                    .place(Order::new(Side::Buy, 6500, 50_000_000))
+                    .expect("placing error");
 
-                    order_book
-                        .place(Order::new(Side::Buy, 6500, 50_000_000))
-                        .expect("placing error");
+                consuming_channel
+                    .basic_ack(
+                        delivery.delivery_tag,
+                        BasicAckOptions::default(),
+                    )
+                    .map(|_| ())
+            })
+            .await;
 
-                    consuming_channel
-                        .basic_ack(
-                            delivery.delivery_tag,
-                            BasicAckOptions::default(),
-                        )
-                        .map(|_| ())
-                })
-                .await;
-
-            Ok(())
-        })
+        Ok(())
     }
 }
 
@@ -102,5 +96,5 @@ pub fn run() {
     let mut exchange = Exchange::new();
     exchange.add_pair("BTC_USD").unwrap();
     info!("Exchange initialized with BTC_USD");
-    exchange.run().expect("unexpected core failure");
+    futures::executor::block_on(exchange.run()).unwrap();
 }
