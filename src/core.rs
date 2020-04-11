@@ -97,3 +97,10 @@ impl<'a> Exchange<'a> {
         })
     }
 }
+
+pub fn run() {
+    let mut exchange = Exchange::new();
+    exchange.add_pair("BTC_USD").unwrap();
+    info!("Exchange initialized with BTC_USD");
+    exchange.run().expect("unexpected core failure");
+}
