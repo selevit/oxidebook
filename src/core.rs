@@ -1,6 +1,7 @@
 use crate::order_book::{Order, OrderBook, Side};
 use futures_util::{future::FutureExt, stream::StreamExt};
 use std::collections::HashMap;
+use tokio::runtime::Runtime;
 
 use lapin::{
     options::{BasicAckOptions, BasicConsumeOptions, QueueDeclareOptions},
@@ -96,5 +97,6 @@ pub fn run() {
     let mut exchange = Exchange::new();
     exchange.add_pair("BTC_USD").unwrap();
     info!("Exchange initialized with BTC_USD");
-    futures::executor::block_on(exchange.run()).unwrap();
+    let mut rt = Runtime::new().unwrap();
+    rt.block_on(exchange.run()).unwrap();
 }

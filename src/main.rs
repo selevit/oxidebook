@@ -4,7 +4,6 @@ pub mod rest_api;
 use std::env;
 use std::process::exit;
 use std::thread;
-use tokio;
 
 #[tokio::main]
 async fn main() {
@@ -12,11 +11,15 @@ async fn main() {
     env_logger::init();
 
     let args: Vec<String> = env::args().collect();
-    if args.len() != 2 {
-        eprintln!("Usage: {} <rest-api|core|all>", args[0]);
-        exit(1);
-    }
-    let module = args[1].as_str();
+
+    let module = match args.len() {
+        1 => "all",
+        2 => args[1].as_str(),
+        _ => {
+            eprintln!("Usage: {} <rest-api|core|all>", args[0]);
+            exit(1);
+        }
+    };
 
     match module {
         "core" => core::run(),
