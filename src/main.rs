@@ -1,3 +1,5 @@
+#!feature(async_closure)]
+
 pub mod core;
 pub mod order_book;
 pub mod rest_api;

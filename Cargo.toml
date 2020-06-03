@@ -15,5 +15,6 @@ futures = "*"
 env_logger = "*"
 log = "*"
 warp = "*"
+deadpool-lapin = "*"
 tokio = { version = "0.2", features = ["macros", "tcp", "dns", "io-util"] }
 uuid = { version = "0.8", features = ["v4"] }
