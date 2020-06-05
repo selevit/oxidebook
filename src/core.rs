@@ -72,6 +72,7 @@ impl<'a> Exchange<'a> {
             .for_each(move |delivery| {
                 let delivery =
                     delivery.expect("error caught in the inbox consumer");
+                info!("delivery: {:?}", delivery);
 
                 let order_book =
                     self.pairs.get_mut("BTC_USD").expect("invalid pair");
@@ -80,6 +81,8 @@ impl<'a> Exchange<'a> {
                     .place(Order::new(Side::Buy, 6500, 50_000_000))
                     .expect("placing error");
 
+                info!("New order placed");
+                info!("{}", order_book);
                 consuming_channel
                     .basic_ack(
                         delivery.delivery_tag,

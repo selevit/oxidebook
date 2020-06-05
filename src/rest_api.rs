@@ -1,8 +1,8 @@
 use std::convert::Infallible;
 use tokio::runtime::Runtime;
-use warp::{http::StatusCode, reject, Filter, Rejection, Reply};
+use warp::Filter;
 
-use lapin::{options::QueueDeclareOptions, types::FieldTable};
+use lapin::{options::BasicPublishOptions, BasicProperties};
 
 use log::info;
 
@@ -17,13 +17,16 @@ fn with_lapin_pool(
 async fn create_order_handler(
     pool: Pool,
 ) -> Result<impl warp::Reply, Infallible> {
-    let mut conn = pool.get().await.unwrap();
-    let consuming_channel = conn.create_channel().await.unwrap();
-    let inbox_queue = consuming_channel
-        .queue_declare(
+    let conn = pool.get().await.unwrap();
+    let channel = conn.create_channel().await.unwrap();
+    let payload = b"hello, world";
+    channel
+        .basic_publish(
+            "",
             "inbox",
-            QueueDeclareOptions::default(),
-            FieldTable::default(),
+            BasicPublishOptions::default(),
+            payload.to_vec(),
+            BasicProperties::default(),
         )
         .await
         .unwrap();
