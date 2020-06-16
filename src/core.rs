@@ -87,7 +87,7 @@ impl<'a> Exchange<'a> {
                     .place(Order::new(side, message.price, message.volume))
                     .expect("placing error");
 
-                // FIXME: orders's sorting with the same price seems to be work incorrectly (tested with sells). Grasp and fix.
+                // FIXME: orders's sorting with the same price seems to be working`` incorrectly (tested with sells). Grasp and fix.
 
                 info!("New order placed");
                 info!("{}", order_book);
