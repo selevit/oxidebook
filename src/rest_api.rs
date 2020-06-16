@@ -1,3 +1,4 @@
+use crate::protocol;
 use serde_derive::{Deserialize, Serialize};
 use std::convert::Infallible;
 use tokio::runtime::Runtime;
@@ -19,6 +20,7 @@ fn with_lapin_pool(
 struct CreateOrderRequest {
     pair: String,
     side: String,
+    // TODO:These values should be decimal strings at this abstraction level
     price: u64,
     volume: u64,
 }
@@ -30,11 +32,19 @@ struct CreateOrderResponse {
 
 async fn create_order_handler(
     pool: Pool,
-    _request: CreateOrderRequest,
+    req: CreateOrderRequest,
 ) -> Result<impl warp::Reply, Infallible> {
+    // TODO: validate request
     let conn = pool.get().await.unwrap();
     let channel = conn.create_channel().await.unwrap();
-    let payload = b"hello, world";
+    let message = protocol::CreateOrderMessage {
+        msg_type: "CreateOrderMessage".to_owned(),
+        price: req.price,
+        side: req.side,
+        pair: req.pair,
+        volume: req.volume,
+    };
+    let payload = serde_json::to_vec(&message).unwrap();
     channel
         .basic_publish(
             "",

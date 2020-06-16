@@ -1,5 +1,6 @@
 pub mod core;
 pub mod order_book;
+pub mod protocol;
 pub mod rest_api;
 use std::env;
 use std::process::exit;

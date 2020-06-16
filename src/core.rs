@@ -1,4 +1,5 @@
 use crate::order_book::{Order, OrderBook, Side};
+use crate::protocol;
 use futures_util::{future::FutureExt, stream::StreamExt};
 use std::collections::HashMap;
 use tokio::runtime::Runtime;
@@ -46,7 +47,6 @@ impl<'a> Exchange<'a> {
             Connection::connect(&addr, ConnectionProperties::default()).await?;
 
         info!("Connected to RabbitMQ");
-
         let consuming_channel = conn.create_channel().await?;
         let inbox_queue = consuming_channel
             .queue_declare(
@@ -55,7 +55,6 @@ impl<'a> Exchange<'a> {
                 FieldTable::default(),
             )
             .await?;
-
         let consumer = consuming_channel
             .clone()
             .basic_consume(
@@ -72,14 +71,23 @@ impl<'a> Exchange<'a> {
             .for_each(move |delivery| {
                 let delivery =
                     delivery.expect("error caught in the inbox consumer");
-                info!("delivery: {:?}", delivery);
+                let message: protocol::CreateOrderMessage =
+                    serde_json::from_slice(&delivery.data).unwrap();
 
-                let order_book =
-                    self.pairs.get_mut("BTC_USD").expect("invalid pair");
+                info!("Message: {:?}", message);
+                let order_book = self
+                    .pairs
+                    .get_mut(message.pair.as_str())
+                    .expect("invalid pair");
 
+                // TODO: serialize enums directly
+                let side =
+                    if message.side == "buy" { Side::Buy } else { Side::Sell };
                 order_book
-                    .place(Order::new(Side::Buy, 6500, 50_000_000))
+                    .place(Order::new(side, message.price, message.volume))
                     .expect("placing error");
+
+                // FIXME: orders's sorting with the same price seems to be work incorrectly (tested with sells). Grasp and fix.
 
                 info!("New order placed");
                 info!("{}", order_book);
