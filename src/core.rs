@@ -1,13 +1,16 @@
 use crate::order_book::{Order, OrderBook, Side};
 use crate::protocol;
-use futures_util::{future::FutureExt, stream::StreamExt};
+use futures_util::stream::StreamExt;
 use std::collections::HashMap;
 use tokio::runtime::Runtime;
 
 use lapin::{
-    options::{BasicAckOptions, BasicConsumeOptions, QueueDeclareOptions},
+    options::{
+        BasicAckOptions, BasicConsumeOptions, BasicPublishOptions,
+        QueueDeclareOptions,
+    },
     types::FieldTable,
-    Connection, ConnectionProperties,
+    BasicProperties, Connection, ConnectionProperties,
 };
 use log::info;
 
@@ -48,6 +51,8 @@ impl<'a> Exchange<'a> {
 
         info!("Connected to RabbitMQ");
         let consuming_channel = conn.create_channel().await?;
+        let producing_channel = conn.create_channel().await?;
+
         let inbox_queue = consuming_channel
             .queue_declare(
                 "inbox",
@@ -55,7 +60,8 @@ impl<'a> Exchange<'a> {
                 FieldTable::default(),
             )
             .await?;
-        let consumer = consuming_channel
+
+        let mut consumer = consuming_channel
             .clone()
             .basic_consume(
                 inbox_queue.name().as_str(),
@@ -64,41 +70,66 @@ impl<'a> Exchange<'a> {
                 FieldTable::default(),
             )
             .await?;
+        let outbox_queue = producing_channel
+            .queue_declare(
+                "outbox",
+                QueueDeclareOptions::default(),
+                FieldTable::default(),
+            )
+            .await?;
 
         info!("Starting consuming inbox");
 
-        consumer
-            .for_each(move |delivery| {
-                let delivery =
-                    delivery.expect("error caught in the inbox consumer");
-                let message: protocol::CreateOrderMessage =
-                    serde_json::from_slice(&delivery.data).unwrap();
+        while let Some(delivery) = consumer.next().await {
+            let delivery =
+                delivery.expect("error caught in the inbox consumer");
+            let message: protocol::CreateOrderMessage =
+                serde_json::from_slice(&delivery.data).unwrap();
 
-                info!("Message: {:?}", message);
-                let order_book = self
-                    .pairs
-                    .get_mut(message.pair.as_str())
-                    .expect("invalid pair");
+            info!("Message: {:?}", message);
+            let order_book = self
+                .pairs
+                .get_mut(message.pair.as_str())
+                .expect("invalid pair");
 
-                // TODO: serialize enums directly
-                let side =
-                    if message.side == "buy" { Side::Buy } else { Side::Sell };
-                order_book
-                    .place(Order::new(side, message.price, message.volume))
-                    .expect("placing error");
+            // TODO: serialize enums directly
+            let side =
+                if message.side == "buy" { Side::Buy } else { Side::Sell };
+            let order = Order::new(side, message.price, message.volume);
 
-                // FIXME: orders's sorting with the same price seems to be working`` incorrectly (tested with sells). Grasp and fix.
+            order_book.place(order).expect("placing error");
 
-                info!("New order placed");
-                info!("{}", order_book);
-                consuming_channel
-                    .basic_ack(
-                        delivery.delivery_tag,
-                        BasicAckOptions::default(),
-                    )
-                    .map(|_| ())
-            })
-            .await;
+            let order_placed_msg = protocol::OrderPlacedMessage {
+                msg_type: "OrderPlaced".to_owned(),
+                order_id: order.id.to_hyphenated().to_string(),
+                side: message.side,
+                price: order.price,
+                volume: order.volume,
+                pair: message.pair,
+            };
+
+            let outbox_payload = serde_json::to_vec(&order_placed_msg).unwrap();
+
+            producing_channel
+                .basic_publish(
+                    "",
+                    outbox_queue.name().as_str(),
+                    BasicPublishOptions::default(),
+                    outbox_payload,
+                    BasicProperties::default(),
+                )
+                .await
+                .unwrap();
+
+            // FIXME: orders's sorting with the same price seems to be working incorrectly (tested with sells). Grasp and fix.
+
+            info!("New order placed");
+            info!("{}", order_book);
+            consuming_channel
+                .basic_ack(delivery.delivery_tag, BasicAckOptions::default())
+                .await
+                .unwrap();
+        }
 
         Ok(())
     }
