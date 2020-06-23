@@ -16,8 +16,9 @@ env_logger = "*"
 serde_derive = "*"
 serde_json = "1.0"
 serde = "*"
+amq-protocol-types = "*"
 log = "*"
 warp = "*"
 deadpool-lapin = "*"
 tokio = { version = "0.2", features = ["macros", "tcp", "dns", "io-util"] }
-uuid = { version = "0.8", features = ["v4"] }
+uuid = { version = "0.8", features = ["v4", "serde"] }

@@ -4,6 +4,7 @@ use futures_util::stream::StreamExt;
 use std::collections::HashMap;
 use tokio::runtime::Runtime;
 
+use amq_protocol_types::ShortString;
 use lapin::{
     options::{
         BasicAckOptions, BasicConsumeOptions, BasicPublishOptions,
@@ -116,7 +117,11 @@ impl<'a> Exchange<'a> {
                     outbox_queue.name().as_str(),
                     BasicPublishOptions::default(),
                     outbox_payload,
-                    BasicProperties::default(),
+                    BasicProperties::default().with_correlation_id(
+                        ShortString::from(
+                            message.msg_id.to_hyphenated().to_string(),
+                        ),
+                    ),
                 )
                 .await
                 .unwrap();

@@ -3,6 +3,7 @@ use futures::join;
 use serde_derive::{Deserialize, Serialize};
 use std::convert::Infallible;
 use tokio::runtime::Runtime;
+use uuid::Uuid;
 use warp::Filter;
 
 use futures_util::stream::StreamExt;
@@ -44,6 +45,7 @@ async fn create_order_handler(
     let conn = pool.get().await.unwrap();
     let channel = conn.create_channel().await.unwrap();
     let message = protocol::CreateOrderMessage {
+        msg_id: Uuid::new_v4(),
         msg_type: "CreateOrderMessage".to_owned(),
         price: req.price,
         side: req.side,

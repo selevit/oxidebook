@@ -879,6 +879,7 @@ dependencies = [
 name = "oxidebook"
 version = "0.1.0"
 dependencies = [
+ "amq-protocol-types 5.1.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "deadpool-lapin 0.5.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "env_logger 0.7.1 (registry+https://github.com/rust-lang/crates.io-index)",
  "futures 0.3.4 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -1622,6 +1623,7 @@ version = "0.8.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 dependencies = [
  "rand 0.7.3 (registry+https://github.com/rust-lang/crates.io-index)",
+ "serde 1.0.106 (registry+https://github.com/rust-lang/crates.io-index)",
 ]
 
 [[package]]
