@@ -1,10 +1,16 @@
 use crate::protocol;
+use futures::join;
 use serde_derive::{Deserialize, Serialize};
 use std::convert::Infallible;
 use tokio::runtime::Runtime;
 use warp::Filter;
 
-use lapin::{options::BasicPublishOptions, BasicProperties};
+use futures_util::stream::StreamExt;
+use lapin::types::FieldTable;
+use lapin::{
+    options::{BasicAckOptions, BasicConsumeOptions, BasicPublishOptions},
+    BasicProperties,
+};
 
 use log::info;
 
@@ -59,6 +65,35 @@ async fn create_order_handler(
     Ok(warp::reply::json(&response))
 }
 
+async fn run_outbox_consumer(pool: Pool) {
+    let conn = pool.get().await.unwrap();
+    let channel = conn.create_channel().await.unwrap();
+
+    let mut consumer = channel
+        .clone()
+        .basic_consume(
+            "outbox",
+            "rest_api",
+            BasicConsumeOptions::default(),
+            FieldTable::default(),
+        )
+        .await
+        .unwrap();
+
+    info!("Starting consuming outbox");
+
+    while let Some(delivery) = consumer.next().await {
+        let delivery = delivery.expect("error caught in the outbox consumer");
+        let message: protocol::OrderPlacedMessage =
+            serde_json::from_slice(&delivery.data).unwrap();
+        info!("Received a message from outbox: {:?}", &message);
+        channel
+            .basic_ack(delivery.delivery_tag, BasicAckOptions::default())
+            .await
+            .unwrap();
+    }
+}
+
 async fn _run() {
     let cfg = Config::from_env("AMQP").unwrap();
     let pool = cfg.create_pool();
@@ -70,7 +105,11 @@ async fn _run() {
         .and(with_lapin_pool(pool.clone()))
         .and(warp::body::json())
         .and_then(create_order_handler);
-    warp::serve(routes).run(([127, 0, 0, 1], 3030)).await;
+
+    let server_fut = warp::serve(routes).run(([127, 0, 0, 1], 3030));
+    let outbox_consumer_fut = run_outbox_consumer(pool);
+
+    join!(server_fut, outbox_consumer_fut);
 }
 
 pub fn run() {
