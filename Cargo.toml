@@ -20,5 +20,5 @@ amq-protocol-types = "*"
 log = "*"
 warp = "*"
 deadpool-lapin = "*"
-tokio = { version = "0.2", features = ["macros", "tcp", "dns", "io-util"] }
+tokio = { version = "0.2", features = ["macros", "tcp", "dns", "io-util", "sync"] }
 uuid = { version = "0.8", features = ["v4", "serde"] }

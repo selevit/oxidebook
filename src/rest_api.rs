@@ -1,8 +1,14 @@
+extern crate futures;
+extern crate tokio;
 use crate::protocol;
 use futures::join;
 use serde_derive::{Deserialize, Serialize};
 use std::convert::Infallible;
+use std::sync::Arc;
 use tokio::runtime::Runtime;
+use tokio::sync::oneshot;
+use tokio::sync::oneshot::Sender;
+use tokio::sync::Mutex;
 use uuid::Uuid;
 use warp::Filter;
 
@@ -12,6 +18,8 @@ use lapin::{
     options::{BasicAckOptions, BasicConsumeOptions, BasicPublishOptions},
     BasicProperties,
 };
+use std::collections::HashMap;
+use std::option::Option;
 
 use log::info;
 
@@ -21,6 +29,39 @@ fn with_lapin_pool(
     pool: Pool,
 ) -> impl Filter<Extract = (Pool,), Error = Infallible> + Clone {
     warp::any().map(move || pool.clone())
+}
+
+struct OutboxResults {
+    senders: Mutex<HashMap<Uuid, Mutex<Option<Sender<String>>>>>,
+}
+
+// https://stackoverflow.com/questions/63397224/multi-threaded-memoisation-in-rust
+impl OutboxResults {
+    pub fn new() -> Self {
+        OutboxResults { senders: Mutex::new(HashMap::new()) }
+    }
+
+    pub async fn wait_for_result(&self, uuid: Uuid) -> String {
+        let (sender, receiver) = oneshot::channel::<String>();
+        self.senders.lock().await.insert(uuid, Mutex::new(Some(sender)));
+        receiver.await.unwrap()
+    }
+
+    pub async fn send_result(&self, uuid: Uuid, result: String) {
+        if let Some(tx) =
+            self.senders.lock().await.get(&uuid).unwrap().lock().await.take()
+        {
+            tx.send(result).unwrap();
+        }
+    }
+}
+
+// https://docs.rs/tokio/0.1.22/tokio/sync/oneshot/fn.channel.html
+fn with_outbox_results(
+    outbox_results: Arc<OutboxResults>,
+) -> impl Filter<Extract = (Arc<OutboxResults>,), Error = std::convert::Infallible>
+       + Clone {
+    warp::any().map(move || outbox_results.clone())
 }
 
 #[derive(Deserialize, Serialize)]
@@ -39,6 +80,7 @@ struct CreateOrderResponse {
 
 async fn create_order_handler(
     pool: Pool,
+    outbox_results: Arc<OutboxResults>,
     req: CreateOrderRequest,
 ) -> Result<impl warp::Reply, Infallible> {
     // TODO: validate request
@@ -63,6 +105,7 @@ async fn create_order_handler(
         )
         .await
         .unwrap();
+    let result = outbox_results.wait_for_result(message.msg_id);
     let response = CreateOrderResponse { order_id: "fake".into() };
     Ok(warp::reply::json(&response))
 }
@@ -99,12 +142,15 @@ async fn run_outbox_consumer(pool: Pool) {
 async fn _run() {
     let cfg = Config::from_env("AMQP").unwrap();
     let pool = cfg.create_pool();
+    let r = Arc::new(OutboxResults::new());
+
     info!("Running REST API server");
 
     let routes = warp::post()
         .and(warp::path("create-order"))
         .and(warp::body::content_length_limit(1024 * 16))
         .and(with_lapin_pool(pool.clone()))
+        .and(with_outbox_results(r))
         .and(warp::body::json())
         .and_then(create_order_handler);
 
@@ -116,5 +162,6 @@ async fn _run() {
 
 pub fn run() {
     let mut rt = Runtime::new().unwrap();
+
     rt.block_on(_run());
 }
