@@ -3,7 +3,9 @@ extern crate tokio;
 use crate::protocol;
 use futures::join;
 use serde_derive::{Deserialize, Serialize};
+use std::cell::RefCell;
 use std::convert::Infallible;
+use std::str::FromStr;
 use std::sync::Arc;
 use tokio::runtime::Runtime;
 use tokio::sync::oneshot;
@@ -32,7 +34,7 @@ fn with_lapin_pool(
 }
 
 struct OutboxResults {
-    senders: Mutex<HashMap<Uuid, Mutex<Option<Sender<String>>>>>,
+    senders: Mutex<HashMap<Uuid, RefCell<Option<Sender<String>>>>>,
 }
 
 // https://stackoverflow.com/questions/63397224/multi-threaded-memoisation-in-rust
@@ -43,13 +45,13 @@ impl OutboxResults {
 
     pub async fn wait_for_result(&self, uuid: Uuid) -> String {
         let (sender, receiver) = oneshot::channel::<String>();
-        self.senders.lock().await.insert(uuid, Mutex::new(Some(sender)));
+        self.senders.lock().await.insert(uuid, RefCell::new(Some(sender)));
         receiver.await.unwrap()
     }
 
     pub async fn send_result(&self, uuid: Uuid, result: String) {
         if let Some(tx) =
-            self.senders.lock().await.get(&uuid).unwrap().lock().await.take()
+            self.senders.lock().await.get(&uuid).unwrap().borrow_mut().take()
         {
             tx.send(result).unwrap();
         }
@@ -105,12 +107,11 @@ async fn create_order_handler(
         )
         .await
         .unwrap();
-    let result = outbox_results.wait_for_result(message.msg_id);
-    let response = CreateOrderResponse { order_id: "fake".into() };
-    Ok(warp::reply::json(&response))
+    let outbox_result = outbox_results.wait_for_result(message.msg_id).await;
+    Ok(outbox_result)
 }
 
-async fn run_outbox_consumer(pool: Pool) {
+async fn run_outbox_consumer(pool: Pool, outbox_results: Arc<OutboxResults>) {
     let conn = pool.get().await.unwrap();
     let channel = conn.create_channel().await.unwrap();
 
@@ -132,6 +133,14 @@ async fn run_outbox_consumer(pool: Pool) {
         let message: protocol::OrderPlacedMessage =
             serde_json::from_slice(&delivery.data).unwrap();
         info!("Received a message from outbox: {:?}", &message);
+
+        let correlation_id =
+            delivery.properties.correlation_id().as_ref().unwrap().as_str();
+        let msg_id = Uuid::from_str(correlation_id).unwrap();
+        outbox_results
+            .send_result(msg_id, String::from_utf8(delivery.data).unwrap())
+            .await;
+
         channel
             .basic_ack(delivery.delivery_tag, BasicAckOptions::default())
             .await
@@ -150,12 +159,12 @@ async fn _run() {
         .and(warp::path("create-order"))
         .and(warp::body::content_length_limit(1024 * 16))
         .and(with_lapin_pool(pool.clone()))
-        .and(with_outbox_results(r))
+        .and(with_outbox_results(r.clone()))
         .and(warp::body::json())
         .and_then(create_order_handler);
 
     let server_fut = warp::serve(routes).run(([127, 0, 0, 1], 3030));
-    let outbox_consumer_fut = run_outbox_consumer(pool);
+    let outbox_consumer_fut = run_outbox_consumer(pool, r.clone());
 
     join!(server_fut, outbox_consumer_fut);
 }
