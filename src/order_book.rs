@@ -46,7 +46,7 @@ impl Side {
 }
 
 /// An order key in the RBTree which is used for storing orders in the correct order.
-#[derive(Debug, Clone, Copy, Eq, PartialEq, PartialOrd)]
+#[derive(Debug, Clone, Copy, Eq, PartialEq)]
 struct TreeKey {
     side: Side,
     price: u64,
@@ -64,6 +64,12 @@ impl Ord for TreeKey {
             cmp if self.side == Side::Sell => cmp,
             cmp => cmp.reverse(),
         }
+    }
+}
+
+impl PartialOrd for TreeKey {
+    fn partial_cmp(&self, other: &TreeKey) -> Option<Ordering> {
+        Some(self.cmp(other))
     }
 }
 
