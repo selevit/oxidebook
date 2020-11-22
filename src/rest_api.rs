@@ -1,6 +1,7 @@
 extern crate futures;
 extern crate tokio;
 use crate::protocol;
+use crate::protocol::OutboxMessage;
 use futures::join;
 use serde_derive::{Deserialize, Serialize};
 use std::cell::RefCell;
@@ -34,22 +35,21 @@ fn with_lapin_pool(
 }
 
 struct OutboxResults {
-    senders: Mutex<HashMap<Uuid, RefCell<Option<Sender<String>>>>>,
+    senders: Mutex<HashMap<Uuid, RefCell<Option<Sender<OutboxMessage>>>>>,
 }
 
-// https://stackoverflow.com/questions/63397224/multi-threaded-memoisation-in-rust
 impl OutboxResults {
     pub fn new() -> Self {
         OutboxResults { senders: Mutex::new(HashMap::new()) }
     }
 
-    pub async fn wait_for_result(&self, uuid: Uuid) -> String {
-        let (sender, receiver) = oneshot::channel::<String>();
+    pub async fn wait_for_result(&self, uuid: Uuid) -> OutboxMessage {
+        let (sender, receiver) = oneshot::channel::<OutboxMessage>();
         self.senders.lock().await.insert(uuid, RefCell::new(Some(sender)));
         receiver.await.unwrap()
     }
 
-    pub async fn send_result(&self, uuid: Uuid, result: String) {
+    pub async fn send_result(&self, uuid: Uuid, result: OutboxMessage) {
         if let Some(tx) =
             self.senders.lock().await.get(&uuid).unwrap().borrow_mut().take()
         {
@@ -58,7 +58,6 @@ impl OutboxResults {
     }
 }
 
-// https://docs.rs/tokio/0.1.22/tokio/sync/oneshot/fn.channel.html
 fn with_outbox_results(
     outbox_results: Arc<OutboxResults>,
 ) -> impl Filter<Extract = (Arc<OutboxResults>,), Error = std::convert::Infallible>
@@ -67,7 +66,7 @@ fn with_outbox_results(
 }
 
 #[derive(Deserialize, Serialize)]
-struct CreateOrderRequest {
+struct PlaceOrderRequest {
     pair: String,
     side: String,
     // TODO:These values should be decimal strings at this abstraction level
@@ -76,26 +75,26 @@ struct CreateOrderRequest {
 }
 
 #[derive(Deserialize, Serialize)]
-struct CreateOrderResponse {
-    order_id: String,
+struct PlaceOrderResponse {
+    order_id: Uuid,
 }
 
-async fn create_order_handler(
+async fn place_order_handler(
     pool: Pool,
     outbox_results: Arc<OutboxResults>,
-    req: CreateOrderRequest,
+    req: PlaceOrderRequest,
 ) -> Result<impl warp::Reply, Infallible> {
     // TODO: validate request
     let conn = pool.get().await.unwrap();
     let channel = conn.create_channel().await.unwrap();
-    let message = protocol::CreateOrderMessage {
-        msg_id: Uuid::new_v4(),
-        msg_type: "CreateOrderMessage".to_owned(),
+    let msg_id = Uuid::new_v4();
+    let message = protocol::InboxMessage::PlaceOrder(protocol::PlaceOrder {
+        msg_id,
         price: req.price,
         side: req.side,
         pair: req.pair,
         volume: req.volume,
-    };
+    });
     let payload = serde_json::to_vec(&message).unwrap();
     channel
         .basic_publish(
@@ -107,8 +106,16 @@ async fn create_order_handler(
         )
         .await
         .unwrap();
-    let outbox_result = outbox_results.wait_for_result(message.msg_id).await;
-    Ok(outbox_result)
+    let outbox_message = outbox_results.wait_for_result(msg_id).await;
+    match outbox_message {
+        protocol::OutboxMessage::OrderPlaced(m) => {
+            let response = serde_json::to_vec(&PlaceOrderResponse {
+                order_id: m.order_id,
+            })
+            .unwrap();
+            Ok(response)
+        }
+    }
 }
 
 async fn run_outbox_consumer(pool: Pool, outbox_results: Arc<OutboxResults>) {
@@ -130,16 +137,16 @@ async fn run_outbox_consumer(pool: Pool, outbox_results: Arc<OutboxResults>) {
 
     while let Some(delivery) = consumer.next().await {
         let delivery = delivery.expect("error caught in the outbox consumer");
-        let message: protocol::OrderPlacedMessage =
+        let outbox_message: protocol::OutboxMessage =
             serde_json::from_slice(&delivery.data).unwrap();
-        info!("Received a message from outbox: {:?}", &message);
+        info!("Received a message from outbox: {:?}", &outbox_message);
 
         let correlation_id =
             delivery.properties.correlation_id().as_ref().unwrap().as_str();
         let msg_id = Uuid::from_str(correlation_id).unwrap();
-        outbox_results
-            .send_result(msg_id, String::from_utf8(delivery.data).unwrap())
-            .await;
+
+        info!("Correlation id: {}", msg_id);
+        outbox_results.send_result(msg_id, outbox_message).await;
 
         channel
             .basic_ack(delivery.delivery_tag, BasicAckOptions::default())
@@ -161,7 +168,7 @@ async fn _run() {
         .and(with_lapin_pool(pool.clone()))
         .and(with_outbox_results(r.clone()))
         .and(warp::body::json())
-        .and_then(create_order_handler);
+        .and_then(place_order_handler);
 
     let server_fut = warp::serve(routes).run(([127, 0, 0, 1], 3030));
     let outbox_consumer_fut = run_outbox_consumer(pool, r.clone());

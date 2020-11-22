@@ -1,5 +1,6 @@
 use crate::order_book::{Order, OrderBook, Side};
 use crate::protocol;
+use crate::protocol::{InboxMessage, OutboxMessage};
 use futures_util::stream::StreamExt;
 use std::collections::HashMap;
 use tokio::runtime::Runtime;
@@ -84,33 +85,44 @@ impl<'a> Exchange<'a> {
         while let Some(delivery) = consumer.next().await {
             let delivery =
                 delivery.expect("error caught in the inbox consumer");
-            let message: protocol::CreateOrderMessage =
+            let inbox_message: InboxMessage =
                 serde_json::from_slice(&delivery.data).unwrap();
 
-            info!("Message: {:?}", message);
-            let order_book = self
-                .pairs
-                .get_mut(message.pair.as_str())
-                .expect("invalid pair");
+            let (outbox_message, correlation_id) = match inbox_message {
+                InboxMessage::PlaceOrder(message) => {
+                    info!("Message: {:?}", message);
+                    let order_book = self
+                        .pairs
+                        .get_mut(message.pair.as_str())
+                        .expect("invalid pair");
 
-            // TODO: serialize enums directly
-            let side =
-                if message.side == "buy" { Side::Buy } else { Side::Sell };
-            let order = Order::new(side, message.price, message.volume);
+                    // TODO: serialize enums directly
+                    let side = if message.side == "buy" {
+                        Side::Buy
+                    } else {
+                        Side::Sell
+                    };
+                    let order = Order::new(side, message.price, message.volume);
 
-            order_book.place(order).expect("placing error");
+                    order_book.place(order).expect("placing error");
 
-            let order_placed_msg = protocol::OrderPlacedMessage {
-                msg_type: "OrderPlaced".to_owned(),
-                order_id: order.id.to_hyphenated().to_string(),
-                side: message.side,
-                price: order.price,
-                volume: order.volume,
-                pair: message.pair,
+                    info!("New order placed");
+                    info!("{}", order_book);
+
+                    (
+                        OutboxMessage::OrderPlaced(protocol::OrderPlaced {
+                            order_id: order.id,
+                            side: message.side,
+                            price: order.price,
+                            volume: order.volume,
+                            pair: message.pair,
+                        }),
+                        message.msg_id,
+                    )
+                }
             };
 
-            let outbox_payload = serde_json::to_vec(&order_placed_msg).unwrap();
-
+            let outbox_payload = serde_json::to_vec(&outbox_message).unwrap();
             producing_channel
                 .basic_publish(
                     "",
@@ -119,7 +131,7 @@ impl<'a> Exchange<'a> {
                     outbox_payload,
                     BasicProperties::default().with_correlation_id(
                         ShortString::from(
-                            message.msg_id.to_hyphenated().to_string(),
+                            correlation_id.to_hyphenated().to_string(),
                         ),
                     ),
                 )
@@ -127,9 +139,6 @@ impl<'a> Exchange<'a> {
                 .unwrap();
 
             // FIXME: orders's sorting with the same price seems to be working incorrectly (tested with sells). Grasp and fix.
-
-            info!("New order placed");
-            info!("{}", order_book);
             consuming_channel
                 .basic_ack(delivery.delivery_tag, BasicAckOptions::default())
                 .await
