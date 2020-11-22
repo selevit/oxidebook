@@ -43,6 +43,11 @@ impl OutboxResults {
         OutboxResults { senders: Mutex::new(HashMap::new()) }
     }
 
+    pub async fn has_id(&self, uuid: Uuid) -> bool {
+        // TODO: use rlock here
+        self.senders.lock().await.contains_key(&uuid)
+    }
+
     pub async fn wait_for_result(&self, uuid: Uuid) -> OutboxMessage {
         let (sender, receiver) = oneshot::channel::<OutboxMessage>();
         self.senders.lock().await.insert(uuid, RefCell::new(Some(sender)));
@@ -139,19 +144,22 @@ async fn run_outbox_consumer(pool: Pool, outbox_results: Arc<OutboxResults>) {
         let delivery = delivery.expect("error caught in the outbox consumer");
         let outbox_message: protocol::OutboxMessage =
             serde_json::from_slice(&delivery.data).unwrap();
-        info!("Received a message from outbox: {:?}", &outbox_message);
+        info!("Received a message from outbox: {:?},", &outbox_message);
 
         let correlation_id =
             delivery.properties.correlation_id().as_ref().unwrap().as_str();
         let msg_id = Uuid::from_str(correlation_id).unwrap();
 
         info!("Correlation id: {}", msg_id);
-        outbox_results.send_result(msg_id, outbox_message).await;
 
-        channel
-            .basic_ack(delivery.delivery_tag, BasicAckOptions::default())
-            .await
-            .unwrap();
+        if outbox_results.has_id(msg_id).await {
+            outbox_results.send_result(msg_id, outbox_message).await;
+
+            channel
+                .basic_ack(delivery.delivery_tag, BasicAckOptions::default())
+                .await
+                .unwrap();
+        }
     }
 }
 
