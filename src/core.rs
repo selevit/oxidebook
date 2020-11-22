@@ -1,6 +1,8 @@
 use crate::order_book::{Order, OrderBook, Side};
 use crate::protocol;
-use crate::protocol::{InboxMessage, OutboxMessage};
+use crate::protocol::{
+    InboxMessage, MessageWithCorrelationId, MessageWithId, OutboxMessage,
+};
 use futures_util::stream::StreamExt;
 use std::collections::HashMap;
 use tokio::runtime::Runtime;
@@ -87,8 +89,9 @@ impl<'a> Exchange<'a> {
                 delivery.expect("error caught in the inbox consumer");
             let inbox_message: InboxMessage =
                 serde_json::from_slice(&delivery.data).unwrap();
+            let inbox_id = inbox_message.get_id();
 
-            let (outbox_message, correlation_id) = match inbox_message {
+            let outbox_message = match inbox_message {
                 InboxMessage::PlaceOrder(message) => {
                     info!("Message: {:?}", message);
                     let order_book = self
@@ -108,21 +111,19 @@ impl<'a> Exchange<'a> {
 
                     info!("New order placed");
                     info!("{}", order_book);
-
-                    (
-                        OutboxMessage::OrderPlaced(protocol::OrderPlaced {
-                            order_id: order.id,
-                            side: message.side,
-                            price: order.price,
-                            volume: order.volume,
-                            pair: message.pair,
-                        }),
-                        message.msg_id,
-                    )
+                    OutboxMessage::OrderPlaced(protocol::OrderPlaced {
+                        inbox_id,
+                        order_id: order.id,
+                        side: message.side,
+                        price: order.price,
+                        volume: order.volume,
+                        pair: message.pair,
+                    })
                 }
             };
 
             let outbox_payload = serde_json::to_vec(&outbox_message).unwrap();
+            let correlation_id = outbox_message.get_correlation_id();
             producing_channel
                 .basic_publish(
                     "",
