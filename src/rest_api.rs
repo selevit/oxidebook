@@ -114,11 +114,7 @@ async fn place_order_handler(
     let outbox_message = outbox_results.wait_for_result(msg_id).await;
     match outbox_message {
         protocol::OutboxMessage::OrderPlaced(m) => {
-            let response = serde_json::to_vec(&PlaceOrderResponse {
-                order_id: m.order_id,
-            })
-            .unwrap();
-            Ok(response)
+            Ok(warp::reply::json(&PlaceOrderResponse { order_id: m.order_id }))
         }
     }
 }
