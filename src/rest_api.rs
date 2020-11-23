@@ -167,7 +167,7 @@ async fn _run() {
     info!("Running REST API server");
 
     let routes = warp::post()
-        .and(warp::path("create-order"))
+        .and(warp::path("place-order"))
         .and(warp::body::content_length_limit(1024 * 16))
         .and(with_lapin_pool(pool.clone()))
         .and(with_outbox_results(r.clone()))
