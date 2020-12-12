@@ -23,3 +23,5 @@ deadpool-lapin = "*"
 tokio = { version = "0.2", features = ["macros", "tcp", "dns", "io-util", "sync"] }
 uuid = { version = "0.8", features = ["v4", "serde"] }
 enum_dispatch = "*"
+thiserror = "1.0"
+anyhow = "1.0"

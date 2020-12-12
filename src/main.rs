@@ -23,14 +23,17 @@ async fn main() {
     };
 
     match module {
-        "core" => core::run(),
-        "rest-api" => rest_api::run(),
+        "core" => core::run().unwrap(),
+        "rest-api" => rest_api::run().unwrap(),
         "all" => {
             let mut threads = vec![];
             threads.push(thread::spawn(core::run));
             threads.push(thread::spawn(rest_api::run));
             for t in threads {
-                t.join().unwrap();
+                match t.join().unwrap() {
+                    Err(e) => panic!(e),
+                    Ok(_) => {},
+                }
             }
         }
         _ => {
