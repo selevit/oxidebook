@@ -8,6 +8,7 @@ use std::cell::RefCell;
 use std::convert::Infallible;
 use std::str::FromStr;
 use std::sync::Arc;
+use anyhow::{Result, Error};
 use tokio::runtime::Runtime;
 use tokio::sync::oneshot;
 use tokio::sync::oneshot::Sender;
@@ -148,6 +149,7 @@ async fn run_outbox_consumer(pool: Pool, outbox_results: Arc<OutboxResults>) {
 
         info!("Correlation id: {}", msg_id);
 
+        // TODO: think about proper routing with many API consumers
         if outbox_results.has_id(msg_id).await {
             outbox_results.send_result(msg_id, outbox_message).await;
 
@@ -159,8 +161,8 @@ async fn run_outbox_consumer(pool: Pool, outbox_results: Arc<OutboxResults>) {
     }
 }
 
-async fn _run() {
-    let cfg = Config::from_env("AMQP").unwrap();
+async fn _run() -> Result<(), Error> {
+    let cfg = Config::from_env("AMQP")?;
     let pool = cfg.create_pool();
     let r = Arc::new(OutboxResults::new());
 
@@ -178,10 +180,11 @@ async fn _run() {
     let outbox_consumer_fut = run_outbox_consumer(pool, r.clone());
 
     join!(server_fut, outbox_consumer_fut);
+    Ok(())
 }
 
-pub fn run() {
-    let mut rt = Runtime::new().unwrap();
-
-    rt.block_on(_run());
+pub fn run() -> Result<()> {
+    let mut rt = Runtime::new()?;
+    rt.block_on(_run())?;
+    Ok(())
 }

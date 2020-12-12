@@ -1,11 +1,13 @@
 use crate::order_book::{Order, OrderBook, Side};
 use crate::protocol;
+use thiserror::Error;
 use crate::protocol::{
     InboxMessage, MessageWithCorrelationId, MessageWithId, OutboxMessage,
 };
 use futures_util::stream::StreamExt;
 use std::collections::HashMap;
 use tokio::runtime::Runtime;
+use anyhow::{Result, Context};
 
 use amq_protocol_types::ShortString;
 use lapin::{
@@ -22,8 +24,9 @@ pub struct Exchange<'a> {
     pairs: HashMap<&'a str, OrderBook>,
 }
 
-#[derive(Debug, PartialEq, Eq)]
+#[derive(Error, Debug)]
 pub enum AddPairError {
+    #[error("trading pair already exists")]
     AlreadyExists,
 }
 
@@ -46,7 +49,7 @@ impl<'a> Exchange<'a> {
         Ok(())
     }
 
-    pub async fn run(&mut self) -> lapin::Result<()> {
+    pub async fn run(&mut self) -> Result<()> {
         let addr = std::env::var("AQMP_ADDR")
             .unwrap_or_else(|_| "amqp://127.0.0.1:5672/%2f".into());
 
@@ -88,7 +91,7 @@ impl<'a> Exchange<'a> {
             let delivery =
                 delivery.expect("error caught in the inbox consumer");
             let inbox_message: InboxMessage =
-                serde_json::from_slice(&delivery.data).unwrap();
+                serde_json::from_slice(&delivery.data)?;
             let inbox_id = inbox_message.get_id();
 
             let outbox_message = match inbox_message {
@@ -97,7 +100,7 @@ impl<'a> Exchange<'a> {
                     let order_book = self
                         .pairs
                         .get_mut(message.pair.as_str())
-                        .expect("invalid pair");
+                        .context("invalid pair")?;
 
                     // TODO: serialize enums directly
                     let side = if message.side == "buy" {
@@ -122,7 +125,7 @@ impl<'a> Exchange<'a> {
                 }
             };
 
-            let outbox_payload = serde_json::to_vec(&outbox_message).unwrap();
+            let outbox_payload = serde_json::to_vec(&outbox_message)?;
             let correlation_id = outbox_message.get_correlation_id();
             producing_channel
                 .basic_publish(
@@ -136,24 +139,23 @@ impl<'a> Exchange<'a> {
                         ),
                     ),
                 )
-                .await
-                .unwrap();
+                .await?;
 
             // FIXME: orders's sorting with the same price seems to be working incorrectly (tested with sells). Grasp and fix.
             consuming_channel
                 .basic_ack(delivery.delivery_tag, BasicAckOptions::default())
-                .await
-                .unwrap();
+                .await?;
         }
 
         Ok(())
     }
 }
 
-pub fn run() {
+pub fn run() -> Result<()> {
     let mut exchange = Exchange::new();
-    exchange.add_pair("BTC_USD").unwrap();
+    exchange.add_pair("BTC_USD")?;
     info!("Exchange initialized with BTC_USD");
-    let mut rt = Runtime::new().unwrap();
-    rt.block_on(exchange.run()).unwrap();
+    let mut rt = Runtime::new()?;
+    rt.block_on(exchange.run())?;
+    Ok(())
 }
