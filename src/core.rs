@@ -1,13 +1,13 @@
 use crate::order_book::{Order, OrderBook, Side};
 use crate::protocol;
-use thiserror::Error;
 use crate::protocol::{
     InboxMessage, MessageWithCorrelationId, MessageWithId, OutboxMessage,
 };
+use anyhow::{Context, Result};
 use futures_util::stream::StreamExt;
 use std::collections::HashMap;
+use thiserror::Error;
 use tokio::runtime::Runtime;
-use anyhow::{Result, Context};
 
 use amq_protocol_types::ShortString;
 use lapin::{

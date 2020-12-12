@@ -1,15 +1,15 @@
 //! An implementation of a trading order book.
 //!
 //! Provides structures and methods for matching and filling exchange orders.
+use anyhow::Result;
 use rbtree::RBTree;
 use std::cmp::{min, Ord, Ordering, PartialEq, PartialOrd};
 use std::collections::HashMap;
 use std::error::Error;
-use thiserror::Error;
 use std::fmt;
 use std::option::Option;
-use anyhow::Result;
 use std::vec::Vec;
+use thiserror::Error;
 use uuid::Uuid;
 
 /// An error which can occur when placing an order

@@ -2,13 +2,13 @@ extern crate futures;
 extern crate tokio;
 use crate::protocol;
 use crate::protocol::OutboxMessage;
+use anyhow::{Error, Result};
 use futures::join;
 use serde_derive::{Deserialize, Serialize};
 use std::cell::RefCell;
 use std::convert::Infallible;
 use std::str::FromStr;
 use std::sync::Arc;
-use anyhow::{Result, Error};
 use tokio::runtime::Runtime;
 use tokio::sync::oneshot;
 use tokio::sync::oneshot::Sender;
@@ -120,9 +120,12 @@ async fn place_order_handler(
     }
 }
 
-async fn run_outbox_consumer(pool: Pool, outbox_results: Arc<OutboxResults>) {
-    let conn = pool.get().await.unwrap();
-    let channel = conn.create_channel().await.unwrap();
+async fn run_outbox_consumer(
+    pool: Pool,
+    outbox_results: Arc<OutboxResults>,
+) -> Result<()> {
+    let conn = pool.get().await?;
+    let channel = conn.create_channel().await?;
 
     let mut consumer = channel
         .clone()
@@ -132,20 +135,19 @@ async fn run_outbox_consumer(pool: Pool, outbox_results: Arc<OutboxResults>) {
             BasicConsumeOptions::default(),
             FieldTable::default(),
         )
-        .await
-        .unwrap();
+        .await?;
 
     info!("Starting consuming outbox");
 
     while let Some(delivery) = consumer.next().await {
         let delivery = delivery.expect("error caught in the outbox consumer");
         let outbox_message: protocol::OutboxMessage =
-            serde_json::from_slice(&delivery.data).unwrap();
+            serde_json::from_slice(&delivery.data)?;
         info!("Received a message from outbox: {:?},", &outbox_message);
 
         let correlation_id =
             delivery.properties.correlation_id().as_ref().unwrap().as_str();
-        let msg_id = Uuid::from_str(correlation_id).unwrap();
+        let msg_id = Uuid::from_str(correlation_id)?;
 
         info!("Correlation id: {}", msg_id);
 
@@ -155,10 +157,11 @@ async fn run_outbox_consumer(pool: Pool, outbox_results: Arc<OutboxResults>) {
 
             channel
                 .basic_ack(delivery.delivery_tag, BasicAckOptions::default())
-                .await
-                .unwrap();
+                .await?;
         }
     }
+
+    Ok(())
 }
 
 async fn _run() -> Result<(), Error> {
@@ -178,8 +181,10 @@ async fn _run() -> Result<(), Error> {
 
     let server_fut = warp::serve(routes).run(([127, 0, 0, 1], 3030));
     let outbox_consumer_fut = run_outbox_consumer(pool, r.clone());
-
-    join!(server_fut, outbox_consumer_fut);
+    let (consumer_result, _) = join!(outbox_consumer_fut, server_fut);
+    if let Err(e) = consumer_result {
+        panic!(e)
+    }
     Ok(())
 }
 

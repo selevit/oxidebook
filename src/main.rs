@@ -30,7 +30,9 @@ async fn main() {
             threads.push(thread::spawn(core::run));
             threads.push(thread::spawn(rest_api::run));
             for t in threads {
-                if let Err(e) =  t.join().unwrap() { panic!(e) }
+                if let Err(e) = t.join().unwrap() {
+                    panic!(e)
+                }
             }
         }
         _ => {
