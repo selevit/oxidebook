@@ -89,7 +89,7 @@ async fn place_order_handler(
     pool: Pool,
     outbox_results: Arc<OutboxResults>,
     req: PlaceOrderRequest,
-) -> anyhow::Result<impl warp::Reply, Infallible> {
+) -> Result<impl warp::Reply, Infallible> {
     // TODO: validate request
     let conn = pool.get().await.unwrap();
     let channel = conn.create_channel().await.unwrap();
@@ -183,7 +183,7 @@ async fn _run() -> Result<(), Error> {
     Ok(())
 }
 
-pub fn run() -> anyhow::Result<(), anyhow::Error> {
+pub fn run() -> Result<()> {
     let mut rt = Runtime::new()?;
     rt.block_on(_run())?;
     Ok(())
