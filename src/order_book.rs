@@ -20,14 +20,14 @@ pub enum PlacingError {
 }
 
 /// An error which can occur when cancelling an order
-#[derive(Debug, Error)]
+#[derive(Debug, Error, PartialEq)]
 pub enum CancellingError {
     #[error("order not found")]
     OrderNotFound,
 }
 
 /// An error which can occur when changing an order volume
-#[derive(Debug, Error)]
+#[derive(Debug, Error, PartialEq)]
 pub enum ChangeOrderVolumeError {
     #[error("order volume cannot be zero")]
     ZeroVolume,
