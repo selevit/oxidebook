@@ -110,7 +110,7 @@ impl<'a> Exchange<'a> {
                     };
                     let order = Order::new(side, message.price, message.volume);
 
-                    order_book.place(order).expect("placing error");
+                    order_book.place(order)?;
 
                     info!("New order placed");
                     info!("{}", order_book);

@@ -5,27 +5,33 @@ use rbtree::RBTree;
 use std::cmp::{min, Ord, Ordering, PartialEq, PartialOrd};
 use std::collections::HashMap;
 use std::error::Error;
+use thiserror::Error;
 use std::fmt;
 use std::option::Option;
+use anyhow::Result;
 use std::vec::Vec;
 use uuid::Uuid;
 
 /// An error which can occur when placing an order
-#[derive(Debug, PartialEq, Eq)]
+#[derive(Debug, Error)]
 pub enum PlacingError {
+    #[error("order cancelled")]
     Cancelled,
 }
 
 /// An error which can occur when cancelling an order
-#[derive(Debug, PartialEq, Eq)]
+#[derive(Debug, Error)]
 pub enum CancellingError {
+    #[error("order not found")]
     OrderNotFound,
 }
 
 /// An error which can occur when changing an order volume
-#[derive(Debug, PartialEq, Eq)]
+#[derive(Debug, Error)]
 pub enum ChangeOrderVolumeError {
+    #[error("order volume cannot be zero")]
     ZeroVolume,
+    #[error("order not found")]
     OrderNotFound,
 }
 
