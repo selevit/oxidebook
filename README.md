@@ -4,14 +4,14 @@
 
 A toy implementation of a trading engine in Rust.
 
-- The core stores anything in memory
+- The core stores everything in memory
 - The state can be recovered by replaying inbox events
-- Uses event sourcing approach
+- Event sourcing approach
 - RabbitMQ for message transport
 
 Now you can:
 
-- Place exchange orders and they matches with each other
+- Place exchange orders and they can fill with each other
 - Cancel orders
 
 How to run:
@@ -26,4 +26,4 @@ And then:
 cargo run
 ```
 
-Then you can you REST API (take a look at its structure in the code :)
+Then you can you REST API (at this stage better take a look at its structure in the code :)
