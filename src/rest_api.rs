@@ -117,7 +117,64 @@ async fn place_order_handler(
         protocol::OutboxMessage::OrderPlaced(m) => {
             Ok(warp::reply::json(&PlaceOrderResponse { order_id: m.order_id }))
         }
+        _ => unreachable!(),
     }
+}
+
+#[derive(Deserialize, Serialize)]
+struct CancelOrderRequest {
+    pair: String,
+    order_id: Uuid,
+}
+
+#[derive(Deserialize, Serialize)]
+pub enum CancelOrderResponseStatus {
+    OrderCancelled,
+    OrderNotFound,
+}
+
+#[derive(Deserialize, Serialize)]
+struct CancelOrderResponse {
+    status: CancelOrderResponseStatus,
+}
+
+async fn cancel_order_handler(
+    pool: Pool,
+    outbox_results: Arc<OutboxResults>,
+    req: CancelOrderRequest,
+) -> Result<impl warp::Reply, Infallible> {
+    let conn = pool.get().await.unwrap();
+    let channel = conn.create_channel().await.unwrap();
+    let msg_id = Uuid::new_v4();
+    let message = protocol::InboxMessage::CancelOrder(protocol::CancelOrder {
+        msg_id,
+        pair: req.pair,
+        order_id: req.order_id,
+    });
+    let payload = serde_json::to_vec(&message).unwrap();
+    channel
+        .basic_publish(
+            "",
+            "inbox",
+            BasicPublishOptions::default(),
+            payload.to_vec(),
+            BasicProperties::default(),
+        )
+        .await
+        .unwrap();
+    let outbox_message = outbox_results.wait_for_result(msg_id).await;
+
+    let cancel_order_status = match outbox_message {
+        protocol::OutboxMessage::OrderCancelled(_) => {
+            CancelOrderResponseStatus::OrderCancelled
+        }
+        protocol::OutboxMessage::OrderNotFound(_) => {
+            CancelOrderResponseStatus::OrderNotFound
+        }
+        _ => unreachable!(),
+    };
+
+    Ok(warp::reply::json(&CancelOrderResponse { status: cancel_order_status }))
 }
 
 async fn run_outbox_consumer(
@@ -171,13 +228,23 @@ async fn _run() -> Result<(), Error> {
 
     info!("Running REST API server");
 
-    let routes = warp::post()
+    let place_order = warp::post()
         .and(warp::path("place-order"))
         .and(warp::body::content_length_limit(1024 * 16))
         .and(with_lapin_pool(pool.clone()))
         .and(with_outbox_results(r.clone()))
         .and(warp::body::json())
         .and_then(place_order_handler);
+
+    let cancel_order = warp::post()
+        .and(warp::path("cancel-order"))
+        .and(warp::body::content_length_limit(1024 * 16))
+        .and(with_lapin_pool(pool.clone()))
+        .and(with_outbox_results(r.clone()))
+        .and(warp::body::json())
+        .and_then(cancel_order_handler);
+
+    let routes = place_order.or(cancel_order);
 
     let server_fut = warp::serve(routes).run(([127, 0, 0, 1], 3030));
     let outbox_consumer_fut = run_outbox_consumer(pool, r.clone());

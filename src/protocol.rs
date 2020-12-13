@@ -27,6 +27,19 @@ impl MessageWithId for PlaceOrder {
     }
 }
 
+#[derive(Deserialize, Serialize, Debug, Clone)]
+pub struct CancelOrder {
+    pub msg_id: Uuid,
+    pub pair: String,
+    pub order_id: Uuid,
+}
+
+impl MessageWithId for CancelOrder {
+    fn get_id(&self) -> Uuid {
+        self.msg_id
+    }
+}
+
 #[derive(Deserialize, Serialize, Debug)]
 pub struct OrderPlaced {
     pub inbox_id: Uuid,
@@ -43,14 +56,39 @@ impl MessageWithCorrelationId for OrderPlaced {
     }
 }
 
+#[derive(Deserialize, Serialize, Debug)]
+pub struct OrderCancelled {
+    pub inbox_id: Uuid,
+}
+
+impl MessageWithCorrelationId for OrderCancelled {
+    fn get_correlation_id(&self) -> Uuid {
+        self.inbox_id
+    }
+}
+
+#[derive(Deserialize, Serialize, Debug)]
+pub struct OrderNotFound {
+    pub inbox_id: Uuid,
+}
+
+impl MessageWithCorrelationId for OrderNotFound {
+    fn get_correlation_id(&self) -> Uuid {
+        self.inbox_id
+    }
+}
+
 #[enum_dispatch(MessageWithId)]
 #[derive(Deserialize, Serialize, Debug)]
 pub enum InboxMessage {
     PlaceOrder(PlaceOrder),
+    CancelOrder(CancelOrder),
 }
 
 #[enum_dispatch(MessageWithCorrelationId)]
 #[derive(Deserialize, Serialize, Debug)]
 pub enum OutboxMessage {
     OrderPlaced(OrderPlaced),
+    OrderCancelled(OrderCancelled),
+    OrderNotFound(OrderNotFound),
 }

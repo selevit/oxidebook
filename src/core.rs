@@ -96,7 +96,7 @@ impl<'a> Exchange<'a> {
 
             let outbox_message = match inbox_message {
                 InboxMessage::PlaceOrder(message) => {
-                    info!("Message: {:?}", message);
+                    info!("Place order message: {:?}", message);
                     let order_book = self
                         .pairs
                         .get_mut(message.pair.as_str())
@@ -122,6 +122,22 @@ impl<'a> Exchange<'a> {
                         volume: order.volume,
                         pair: message.pair,
                     })
+                }
+                InboxMessage::CancelOrder(message) => {
+                    info!("Cancel order message: {:?}", message);
+                    let order_book = self
+                        .pairs
+                        .get_mut(message.pair.as_str())
+                        .context("invalid pair")?;
+
+                    match order_book.cancel_order(message.order_id) {
+                        Ok(_) => OutboxMessage::OrderCancelled(
+                            protocol::OrderCancelled { inbox_id },
+                        ),
+                        Err(_) => OutboxMessage::OrderNotFound(
+                            protocol::OrderNotFound { inbox_id },
+                        ),
+                    }
                 }
             };
 
