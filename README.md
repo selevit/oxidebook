@@ -6,7 +6,7 @@ A toy implementation of a trading engine in Rust.
 
 - The core stores everything in memory
 - The state can be recovered by replaying inbox events
-- Event sourcing approach
+- Event sourcing
 - RabbitMQ for message transport
 
 Now you can:
