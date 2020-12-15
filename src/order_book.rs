@@ -99,7 +99,7 @@ impl Order {
         Order { id: Uuid::new_v4(), side, price, volume }
     }
 
-    fn _tree_key(&self, seq_id: u64) -> TreeKey {
+    fn tree_key(&self, seq_id: u64) -> TreeKey {
         TreeKey { side: self.side, price: self.price, seq_id }
     }
 }
@@ -208,7 +208,7 @@ impl OrderBook {
         let mut order = order;
 
         for (key, maker_order) in
-            self._tree_mut(order.side.opposite()).iter_mut()
+            self.tree_mut(order.side.opposite()).iter_mut()
         {
             match order.price.cmp(&maker_order.price) {
                 Ordering::Less if order.side == Side::Buy => break,
@@ -235,10 +235,10 @@ impl OrderBook {
         }
 
         for (key, order) in &removed_orders {
-            self._remove_order(key, &order.id);
+            self.remove_order(key, &order.id);
         }
         if order.volume != 0 {
-            self._add_order(&order);
+            self.add_order(&order);
         }
 
         Ok(deals)
@@ -248,7 +248,7 @@ impl OrderBook {
     pub fn get_order(&self, id: Uuid) -> Option<&Order> {
         match self.by_uuid.get(&id) {
             Some(key) => {
-                let tree = self._tree(key.side);
+                let tree = self.tree(key.side);
                 Some(tree.get(key).unwrap())
             }
             None => None,
@@ -267,7 +267,7 @@ impl OrderBook {
         match self.by_uuid.get(&order_id) {
             Some(key) => {
                 let key = *key;
-                let tree = self._tree_mut(key.side);
+                let tree = self.tree_mut(key.side);
                 let order = tree.get(&key).unwrap();
                 let mut new_order = *order;
                 new_order.volume = new_volume;
@@ -286,35 +286,35 @@ impl OrderBook {
         match self.by_uuid.get(&order_id) {
             Some(key) => {
                 let key = *key;
-                self._remove_order(&key, &order_id);
+                self.remove_order(&key, &order_id);
                 Ok(())
             }
             None => Err(CancellingError::OrderNotFound),
         }
     }
 
-    fn _add_order(&mut self, order: &Order) {
-        let key = order._tree_key(self.next_seq_id);
-        let tree = self._tree_mut(order.side);
+    fn add_order(&mut self, order: &Order) {
+        let key = order.tree_key(self.next_seq_id);
+        let tree = self.tree_mut(order.side);
         tree.insert(key, *order);
         self.by_uuid.insert(order.id, key);
         self.next_seq_id += 1;
     }
 
-    fn _remove_order(&mut self, key: &TreeKey, order_id: &Uuid) {
-        let tree = self._tree_mut(key.side);
+    fn remove_order(&mut self, key: &TreeKey, order_id: &Uuid) {
+        let tree = self.tree_mut(key.side);
         tree.remove(key);
         self.by_uuid.remove(order_id);
     }
 
-    fn _tree(&self, side: Side) -> &RBTree<TreeKey, Order> {
+    fn tree(&self, side: Side) -> &RBTree<TreeKey, Order> {
         match side {
             Side::Sell => &self.sell_levels,
             Side::Buy => &self.buy_levels,
         }
     }
 
-    fn _tree_mut(&mut self, side: Side) -> &mut RBTree<TreeKey, Order> {
+    fn tree_mut(&mut self, side: Side) -> &mut RBTree<TreeKey, Order> {
         match side {
             Side::Sell => &mut self.sell_levels,
             Side::Buy => &mut self.buy_levels,
