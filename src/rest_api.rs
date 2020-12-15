@@ -1,7 +1,8 @@
 extern crate futures;
 extern crate tokio;
+use crate::order_book::Deal;
 use crate::protocol;
-use crate::protocol::OutboxMessage;
+use crate::protocol::OutboxEnvelope;
 use anyhow::{Error, Result};
 use futures::join;
 use serde_derive::{Deserialize, Serialize};
@@ -36,7 +37,7 @@ fn with_lapin_pool(
 }
 
 struct OutboxResults {
-    senders: Mutex<HashMap<Uuid, RefCell<Option<Sender<OutboxMessage>>>>>,
+    senders: Mutex<HashMap<Uuid, RefCell<Option<Sender<OutboxEnvelope>>>>>,
 }
 
 impl OutboxResults {
@@ -49,13 +50,13 @@ impl OutboxResults {
         self.senders.lock().await.contains_key(&uuid)
     }
 
-    pub async fn wait_for_result(&self, uuid: Uuid) -> OutboxMessage {
-        let (sender, receiver) = oneshot::channel::<OutboxMessage>();
+    pub async fn wait_for_result(&self, uuid: Uuid) -> OutboxEnvelope {
+        let (sender, receiver) = oneshot::channel::<OutboxEnvelope>();
         self.senders.lock().await.insert(uuid, RefCell::new(Some(sender)));
         receiver.await.unwrap()
     }
 
-    pub async fn send_result(&self, uuid: Uuid, result: OutboxMessage) {
+    pub async fn send_result(&self, uuid: Uuid, result: OutboxEnvelope) {
         if let Some(tx) =
             self.senders.lock().await.get(&uuid).unwrap().borrow_mut().take()
         {
@@ -83,6 +84,13 @@ struct PlaceOrderRequest {
 #[derive(Deserialize, Serialize)]
 struct PlaceOrderResponse {
     order_id: Uuid,
+    deals: Vec<Deal>,
+}
+
+impl PlaceOrderResponse {
+    fn dummy() -> Self {
+        PlaceOrderResponse { order_id: Uuid::nil(), deals: vec![] }
+    }
 }
 
 async fn place_order_handler(
@@ -102,6 +110,7 @@ async fn place_order_handler(
         volume: req.volume,
     });
     let payload = serde_json::to_vec(&message).unwrap();
+
     channel
         .basic_publish(
             "",
@@ -112,13 +121,27 @@ async fn place_order_handler(
         )
         .await
         .unwrap();
-    let outbox_message = outbox_results.wait_for_result(msg_id).await;
-    match outbox_message {
-        protocol::OutboxMessage::OrderPlaced(m) => {
-            Ok(warp::reply::json(&PlaceOrderResponse { order_id: m.order_id }))
+
+    let outbox_envelope = outbox_results.wait_for_result(msg_id).await;
+    let mut response = PlaceOrderResponse::dummy();
+
+    for outbox_message in outbox_envelope.messages {
+        match outbox_message {
+            protocol::OutboxMessage::OrderPlaced(m) => {
+                response.order_id = m.order_id;
+            }
+            protocol::OutboxMessage::OrderFilled(m) => {
+                response.deals.push(Deal {
+                    taker_order: m.taker_order,
+                    maker_order: m.maker_order,
+                    volume: m.volume,
+                })
+            }
+            _ => unreachable!(),
         }
-        _ => unreachable!(),
     }
+
+    Ok(warp::reply::json(&response))
 }
 
 #[derive(Deserialize, Serialize)]
@@ -162,9 +185,10 @@ async fn cancel_order_handler(
         )
         .await
         .unwrap();
-    let outbox_message = outbox_results.wait_for_result(msg_id).await;
+    let outbox_envelope = outbox_results.wait_for_result(msg_id).await;
+    let outbox_msg = &outbox_envelope.messages[0];
 
-    let cancel_order_status = match outbox_message {
+    let cancel_order_status = match outbox_msg {
         protocol::OutboxMessage::OrderCancelled(_) => {
             CancelOrderResponseStatus::OrderCancelled
         }
@@ -198,9 +222,9 @@ async fn run_outbox_consumer(
 
     while let Some(delivery) = consumer.next().await {
         let delivery = delivery.expect("error caught in the outbox consumer");
-        let outbox_message: protocol::OutboxMessage =
+        let outbox_env: protocol::OutboxEnvelope =
             serde_json::from_slice(&delivery.data)?;
-        info!("Received a message from outbox: {:?},", &outbox_message);
+        info!("Received an envelope from outbox: {:?},", &outbox_env);
 
         let correlation_id =
             delivery.properties.correlation_id().as_ref().unwrap().as_str();
@@ -210,7 +234,7 @@ async fn run_outbox_consumer(
 
         // TODO: think about proper routing with many API consumers
         if outbox_results.has_id(msg_id).await {
-            outbox_results.send_result(msg_id, outbox_message).await;
+            outbox_results.send_result(msg_id, outbox_env).await;
 
             channel
                 .basic_ack(delivery.delivery_tag, BasicAckOptions::default())

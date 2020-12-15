@@ -1,7 +1,7 @@
 use crate::order_book::{Order, OrderBook, Side};
 use crate::protocol;
 use crate::protocol::{
-    InboxMessage, MessageWithCorrelationId, MessageWithId, OutboxMessage,
+    InboxMessage, MessageWithId, OutboxEnvelope, OutboxMessage,
 };
 use anyhow::{Context, Result};
 use futures_util::stream::StreamExt;
@@ -93,8 +93,9 @@ impl<'a> Exchange<'a> {
             let inbox_message: InboxMessage =
                 serde_json::from_slice(&delivery.data)?;
             let inbox_id = inbox_message.get_id();
+            let mut outbox = OutboxEnvelope::new(inbox_id);
 
-            let outbox_message = match inbox_message {
+            match inbox_message {
                 InboxMessage::PlaceOrder(message) => {
                     info!("Place order message: {:?}", message);
                     let order_book = self
@@ -110,18 +111,30 @@ impl<'a> Exchange<'a> {
                     };
                     let order = Order::new(side, message.price, message.volume);
 
-                    order_book.place(order)?;
+                    let deals = order_book.place(order)?;
 
                     info!("New order placed");
                     info!("{}", order_book);
-                    OutboxMessage::OrderPlaced(protocol::OrderPlaced {
-                        inbox_id,
-                        order_id: order.id,
-                        side: message.side,
-                        price: order.price,
-                        volume: order.volume,
-                        pair: message.pair,
-                    })
+
+                    outbox.add_message(OutboxMessage::OrderPlaced(
+                        protocol::OrderPlaced {
+                            order_id: order.id,
+                            side: message.side,
+                            price: order.price,
+                            volume: order.volume,
+                            pair: message.pair,
+                        },
+                    ));
+
+                    for deal in deals {
+                        outbox.add_message(OutboxMessage::OrderFilled(
+                            protocol::OrderFilled {
+                                maker_order: deal.maker_order,
+                                taker_order: deal.taker_order,
+                                volume: deal.volume,
+                            },
+                        ));
+                    }
                 }
                 InboxMessage::CancelOrder(message) => {
                     info!("Cancel order message: {:?}", message);
@@ -130,19 +143,28 @@ impl<'a> Exchange<'a> {
                         .get_mut(message.pair.as_str())
                         .context("invalid pair")?;
 
-                    match order_book.cancel_order(message.order_id) {
-                        Ok(_) => OutboxMessage::OrderCancelled(
-                            protocol::OrderCancelled { inbox_id },
-                        ),
-                        Err(_) => OutboxMessage::OrderNotFound(
-                            protocol::OrderNotFound { inbox_id },
-                        ),
-                    }
+                    outbox.add_message(
+                        match order_book.cancel_order(message.order_id) {
+                            Ok(_) => OutboxMessage::OrderCancelled(
+                                protocol::OrderCancelled {
+                                    pair: message.pair,
+                                    order_id: message.order_id,
+                                },
+                            ),
+                            Err(_) => OutboxMessage::OrderNotFound(
+                                protocol::OrderNotFound {
+                                    pair: message.pair,
+                                    order_id: message.order_id,
+                                },
+                            ),
+                        },
+                    );
                 }
             };
 
-            let outbox_payload = serde_json::to_vec(&outbox_message)?;
-            let correlation_id = outbox_message.get_correlation_id();
+            let outbox_payload = serde_json::to_vec(&outbox)?;
+            let correlation_id = outbox.inbox_correlation_id;
+
             producing_channel
                 .basic_publish(
                     "",

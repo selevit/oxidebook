@@ -3,6 +3,7 @@
 //! Provides structures and methods for matching and filling exchange orders.
 use anyhow::Result;
 use rbtree::RBTree;
+use serde_derive::{Deserialize, Serialize};
 use std::cmp::{min, Ord, Ordering, PartialEq, PartialOrd};
 use std::collections::HashMap;
 use std::error::Error;
@@ -36,7 +37,9 @@ pub enum ChangeOrderVolumeError {
 }
 
 /// A side of the exchange order book (buy or sell)
-#[derive(PartialEq, Debug, Clone, Copy, Eq, PartialOrd)]
+#[derive(
+    PartialEq, Debug, Clone, Copy, Eq, PartialOrd, Serialize, Deserialize,
+)]
 pub enum Side {
     Buy,
     Sell,
@@ -82,7 +85,7 @@ impl PartialOrd for TreeKey {
 /// An exchange order for buying or selling assets.
 ///
 /// All prices and volumes are present as integers in base values (e.g. Satoshi or Wei)
-#[derive(Debug, Clone, Copy, Eq, PartialEq)]
+#[derive(Debug, Clone, Copy, Eq, PartialEq, Serialize, Deserialize)]
 pub struct Order {
     pub id: Uuid,
     pub side: Side,
@@ -104,11 +107,11 @@ impl Order {
 /// A deal which is the result of orders filling.
 ///
 /// Stores the state of taker and maker orders before the deal.
-#[derive(Debug, Eq, PartialEq)]
+#[derive(Debug, Eq, PartialEq, Serialize, Deserialize)]
 pub struct Deal {
-    taker_order: Order,
-    maker_order: Order,
-    volume: u64,
+    pub taker_order: Order,
+    pub maker_order: Order,
+    pub volume: u64,
 }
 
 /// A trading order book.

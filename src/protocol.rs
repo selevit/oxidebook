@@ -1,3 +1,4 @@
+use crate::order_book::Order;
 use enum_dispatch::enum_dispatch;
 use serde_derive::{Deserialize, Serialize};
 use uuid::Uuid;
@@ -5,11 +6,6 @@ use uuid::Uuid;
 #[enum_dispatch]
 pub trait MessageWithId {
     fn get_id(&self) -> Uuid;
-}
-
-#[enum_dispatch]
-pub trait MessageWithCorrelationId {
-    fn get_correlation_id(&self) -> Uuid;
 }
 
 #[derive(Deserialize, Serialize, Debug, Clone)]
@@ -42,7 +38,6 @@ impl MessageWithId for CancelOrder {
 
 #[derive(Deserialize, Serialize, Debug)]
 pub struct OrderPlaced {
-    pub inbox_id: Uuid,
     pub pair: String,
     pub side: String,
     pub price: u64,
@@ -50,32 +45,23 @@ pub struct OrderPlaced {
     pub order_id: Uuid,
 }
 
-impl MessageWithCorrelationId for OrderPlaced {
-    fn get_correlation_id(&self) -> Uuid {
-        self.inbox_id
-    }
+#[derive(Deserialize, Serialize, Debug)]
+pub struct OrderFilled {
+    pub taker_order: Order,
+    pub maker_order: Order,
+    pub volume: u64,
 }
 
 #[derive(Deserialize, Serialize, Debug)]
 pub struct OrderCancelled {
-    pub inbox_id: Uuid,
-}
-
-impl MessageWithCorrelationId for OrderCancelled {
-    fn get_correlation_id(&self) -> Uuid {
-        self.inbox_id
-    }
+    pub order_id: Uuid,
+    pub pair: String,
 }
 
 #[derive(Deserialize, Serialize, Debug)]
 pub struct OrderNotFound {
-    pub inbox_id: Uuid,
-}
-
-impl MessageWithCorrelationId for OrderNotFound {
-    fn get_correlation_id(&self) -> Uuid {
-        self.inbox_id
-    }
+    pub order_id: Uuid,
+    pub pair: String,
 }
 
 #[enum_dispatch(MessageWithId)]
@@ -85,10 +71,26 @@ pub enum InboxMessage {
     CancelOrder(CancelOrder),
 }
 
-#[enum_dispatch(MessageWithCorrelationId)]
 #[derive(Deserialize, Serialize, Debug)]
 pub enum OutboxMessage {
     OrderPlaced(OrderPlaced),
+    OrderFilled(OrderFilled),
     OrderCancelled(OrderCancelled),
     OrderNotFound(OrderNotFound),
+}
+
+#[derive(Deserialize, Serialize, Debug)]
+pub struct OutboxEnvelope {
+    pub inbox_correlation_id: Uuid,
+    pub messages: Vec<OutboxMessage>,
+}
+
+impl OutboxEnvelope {
+    pub fn new(inbox_correlation_id: Uuid) -> Self {
+        OutboxEnvelope { inbox_correlation_id, messages: vec![] }
+    }
+
+    pub fn add_message(&mut self, msg: OutboxMessage) {
+        self.messages.push(msg);
+    }
 }
