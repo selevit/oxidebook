@@ -1,7 +1,6 @@
 use crate::order_book::{Order, OrderBook, Side};
-use crate::protocol;
 use crate::protocol::{
-    InboxMessage, MessageWithId, OutboxEnvelope, OutboxMessage,
+    self, InboxMessage, MessageWithId, OutboxEnvelope, OutboxMessage,
 };
 use anyhow::{Context, Result};
 use futures_util::stream::StreamExt;
