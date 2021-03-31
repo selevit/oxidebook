@@ -280,7 +280,7 @@ async fn _run() -> Result<(), Error> {
 }
 
 pub fn run() -> Result<()> {
-    let mut rt = Runtime::new()?;
+    let rt = Runtime::new()?;
     rt.block_on(_run())?;
     Ok(())
 }

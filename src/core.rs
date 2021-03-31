@@ -192,7 +192,7 @@ pub fn run() -> Result<()> {
     let mut exchange = Exchange::new();
     exchange.add_pair("BTC_USD")?;
     info!("Exchange initialized with BTC_USD");
-    let mut rt = Runtime::new()?;
+    let rt = Runtime::new()?;
     rt.block_on(exchange.run())?;
     Ok(())
 }

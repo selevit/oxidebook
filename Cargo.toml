@@ -21,7 +21,7 @@ amq-protocol-types = "*"
 log = "*"
 warp = "*"
 deadpool-lapin = "*"
-tokio = { version = "0.2", features = ["macros", "tcp", "dns", "io-util", "sync"] }
+tokio = { version = "1.4.0", features = ["macros", "net", "io-util", "sync", "rt-multi-thread"] }
 uuid = { version = "0.8", features = ["v4", "serde"] }
 enum_dispatch = "*"
 thiserror = "1.0"
