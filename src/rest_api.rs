@@ -274,7 +274,7 @@ async fn _run() -> Result<(), Error> {
     let outbox_consumer_fut = run_outbox_consumer(pool, r.clone());
     let (consumer_result, _) = join!(outbox_consumer_fut, server_fut);
     if let Err(e) = consumer_result {
-        panic!(e)
+        panic!("{}", e)
     }
     Ok(())
 }
