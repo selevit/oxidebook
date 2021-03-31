@@ -3,27 +3,25 @@ name = "oxidebook"
 version = "0.1.0"
 authors = ["Sergey Levitin <selevit@gmail.com>"]
 edition = "2018"
-resolver = "2"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
 rbtree = "0.1.5"
-lapin = "1.6.8"
-futures-executor = "0.3.13"
-futures-util = "0.3.13"
-futures = "0.3.13"
-env_logger = "0.8.3"
-serde_derive = "1.0.125"
-serde_json = "1.0.64"
-serde = "1.0.125"
-# amq-protocol-types = "6.0.3"
-amq-protocol-types = "7.0.0-alpha.7"
-log = "0.4.14"
-warp = "0.3.1"
-deadpool-lapin = "0.7.0"
-tokio = { version = "1.4.0", features = [ "macros", "net", "io-util", "sync", "rt-multi-thread"] }
-uuid = { version = "0.8.2", features = ["v4", "serde"] }
-enum_dispatch = "0.3.5"
-thiserror = "1.0.24"
-anyhow = "1.0.40"
+lapin = "*"
+futures-executor = "*"
+futures-util = "*"
+futures = "*"
+env_logger = "*"
+serde_derive = "*"
+serde_json = "1.0"
+serde = "*"
+amq-protocol-types = "*"
+log = "*"
+warp = "*"
+deadpool-lapin = "*"
+tokio = { version = "0.2", features = ["macros", "tcp", "dns", "io-util", "sync"] }
+uuid = { version = "0.8", features = ["v4", "serde"] }
+enum_dispatch = "*"
+thiserror = "1.0"
+anyhow = "1.0"
