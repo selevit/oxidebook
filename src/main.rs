@@ -2,6 +2,7 @@ pub mod core;
 pub mod order_book;
 pub mod protocol;
 pub mod rest_api;
+
 use std::env;
 use std::process::exit;
 use std::thread;
@@ -31,7 +32,7 @@ async fn main() {
             threads.push(thread::spawn(rest_api::run));
             for t in threads {
                 if let Err(e) = t.join().unwrap() {
-                    panic!(e)
+                    panic!("{:?}", e)
                 }
             }
         }
