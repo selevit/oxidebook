@@ -2,6 +2,7 @@ pub mod core;
 pub mod order_book;
 pub mod protocol;
 pub mod rest_api;
+pub mod ws_md_api;
 use std::env;
 use std::process::exit;
 use std::thread;
@@ -17,7 +18,7 @@ async fn main() {
         1 => "all",
         2 => args[1].as_str(),
         _ => {
-            eprintln!("Usage: {} <rest-api|core|all>", args[0]);
+            eprintln!("Usage: {} <rest-api|core|ws-md-api|all>", args[0]);
             exit(1);
         }
     };
@@ -25,10 +26,12 @@ async fn main() {
     match module {
         "core" => core::run().unwrap(),
         "rest-api" => rest_api::run().unwrap(),
+        "ws-md-api" => ws_md_api::run().unwrap(),
         "all" => {
             let mut threads = vec![];
             threads.push(thread::spawn(core::run));
             threads.push(thread::spawn(rest_api::run));
+            threads.push(thread::spawn(ws_md_api::run));
             for t in threads {
                 if let Err(e) = t.join().unwrap() {
                     panic!(e)

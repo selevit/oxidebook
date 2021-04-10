@@ -25,3 +25,8 @@ uuid = { version = "0.8", features = ["v4", "serde"] }
 enum_dispatch = "*"
 thiserror = "1.0"
 anyhow = "1.0"
+tungstenite = "*"
+tokio-tungstenite = "*"
+futures-channel = "*"
+async-std = "*"
+
