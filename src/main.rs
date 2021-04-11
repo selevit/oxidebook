@@ -3,6 +3,8 @@ pub mod order_book;
 pub mod protocol;
 pub mod rest_api;
 pub mod ws_md_api;
+pub mod outbox;
+pub mod transport;
 use std::env;
 use std::process::exit;
 use std::thread;

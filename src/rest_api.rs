@@ -16,6 +16,11 @@ use tokio::sync::oneshot::Sender;
 use tokio::sync::Mutex;
 use uuid::Uuid;
 use warp::Filter;
+use crate::outbox::{OutboxConsumer,OutboxHandler};
+use crate::transport::create_coon_pool;
+use std::future::Future;
+use std::pin::Pin;
+use std::sync::Arc;
 
 use futures_util::stream::StreamExt;
 use lapin::types::FieldTable;
@@ -201,46 +206,56 @@ async fn cancel_order_handler(
     Ok(warp::reply::json(&CancelOrderResponse { status: cancel_order_status }))
 }
 
-async fn run_outbox_consumer(
-    pool: Pool,
-    outbox_results: Arc<OutboxResults>,
-) -> Result<()> {
-    let conn = pool.get().await?;
-    let channel = conn.create_channel().await?;
-
-    let mut consumer = channel
-        .clone()
-        .basic_consume(
-            "outbox",
-            "rest_api",
-            BasicConsumeOptions::default(),
-            FieldTable::default(),
-        )
-        .await?;
-
-    info!("Starting consuming outbox");
-
-    while let Some(delivery) = consumer.next().await {
-        let delivery = delivery.expect("error caught in the outbox consumer");
-        let outbox_env: protocol::OutboxEnvelope =
-            serde_json::from_slice(&delivery.data)?;
-        info!("Received an envelope from outbox: {:?},", &outbox_env);
-
-        let correlation_id =
-            delivery.properties.correlation_id().as_ref().unwrap().as_str();
-        let msg_id = Uuid::from_str(correlation_id)?;
-
-        info!("Correlation id: {}", msg_id);
-
+async fn run_outbox_consumer(pool: Pool, results: Arc<OutboxResults>) -> Result<()> {
+    let consumer = OutboxConsumer::new("ws_api", pool.clone());
+    let outbox_handler: OutboxHandler = Box::new(|envelope| Box::pin(async {
+        info!("Received an envelope from outbox: {:?},", &envelope);
+        info!("Correlation id: {}", envelope.inbox_correlation_id);
         // TODO: think about proper routing with many API consumers
-        if outbox_results.has_id(msg_id).await {
-            outbox_results.send_result(msg_id, outbox_env).await;
-
-            channel
-                .basic_ack(delivery.delivery_tag, BasicAckOptions::default())
-                .await?;
+        let has_id = results.has_id(envelope.inbox_correlation_id).await; 
+        if has_id {
+            results.send_result(envelope.inbox_correlation_id, envelope).await;
         }
-    }
+        Ok(())
+    }));
+    consumer.subscribe(outbox_handler).await?;
+
+    // let conn = pool.get().await?;
+    // let channel = conn.create_channel().await?;
+
+    // let mut consumer = channel
+    //     .clone()
+    //     .basic_consume(
+    //         "outbox",
+    //         "rest_api",
+    //         BasicConsumeOptions::default(),
+    //         FieldTable::default(),
+    //     )
+    //     .await?;
+
+    // info!("Starting consuming outbox");
+
+    // while let Some(delivery) = consumer.next().await {
+    //     let delivery = delivery.expect("error caught in the outbox consumer");
+    //     let outbox_env: protocol::OutboxEnvelope =
+    //         serde_json::from_slice(&delivery.data)?;
+    //     info!("Received an envelope from outbox: {:?},", &outbox_env);
+
+    //     let correlation_id =
+    //         delivery.properties.correlation_id().as_ref().unwrap().as_str();
+    //     let msg_id = Uuid::from_str(correlation_id)?;
+
+    //     info!("Correlation id: {}", msg_id);
+
+    //     // TODO: think about proper routing with many API consumers
+    //     if outbox_results.has_id(msg_id).await {
+    //         outbox_results.send_result(msg_id, outbox_env).await;
+
+    //         channel
+    //             .basic_ack(delivery.delivery_tag, BasicAckOptions::default())
+    //             .await?;
+    //     }
+    // }
 
     Ok(())
 }

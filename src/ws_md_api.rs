@@ -11,6 +11,9 @@ use futures_channel::mpsc::UnboundedSender;
 
 use tokio::net::{TcpListener, TcpStream};
 use tungstenite::protocol::Message;
+use crate::outbox::OutboxConsumer;
+use crate::protocol::OutboxEnvelope;
+use crate::transport::create_coon_pool;
 
 type Tx = UnboundedSender<Message>;
 type PeerMap = Arc<Mutex<HashMap<SocketAddr, Tx>>>;
@@ -37,6 +40,14 @@ async fn handle_connection(
 
 async fn run_ws_market_data_api() -> Result<(), Error> {
     info!("Running WS Market Data API");
+
+    let pool = create_coon_pool()?;
+    // let consumer = OutboxConsumer::new("ws_market_data", pool.clone());
+
+    // consumer.subscribe(Box::new(move |envelope| Box::pin(async move {
+    //     info!("Received an envelope from outbox: {:?},", envelope);
+    //     Ok(())
+    // }))).await?;
 
     let addr = std::env::var("WS_MD_API_LISTEN_ADDR")
         .unwrap_or_else(|_| "127.0.0.1:4040".into());
