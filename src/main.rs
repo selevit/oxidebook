@@ -1,10 +1,11 @@
 pub mod core;
 pub mod order_book;
+pub mod outbox;
 pub mod protocol;
 pub mod rest_api;
-pub mod ws_md_api;
-pub mod outbox;
 pub mod transport;
+pub mod ws_md_api;
+
 use std::env;
 use std::process::exit;
 use std::thread;
@@ -36,7 +37,7 @@ async fn main() {
             threads.push(thread::spawn(ws_md_api::run));
             for t in threads {
                 if let Err(e) = t.join().unwrap() {
-                    panic!(e)
+                    panic!("{:?}", e)
                 }
             }
         }

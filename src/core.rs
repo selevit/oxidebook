@@ -1,7 +1,6 @@
 use crate::order_book::{Order, OrderBook, Side};
-use crate::protocol;
 use crate::protocol::{
-    InboxMessage, MessageWithId, OutboxEnvelope, OutboxMessage,
+    self, InboxMessage, MessageWithId, OutboxEnvelope, OutboxMessage,
 };
 use anyhow::{Context, Result};
 use futures_util::stream::StreamExt;
@@ -193,7 +192,7 @@ pub fn run() -> Result<()> {
     let mut exchange = Exchange::new();
     exchange.add_pair("BTC_USD")?;
     info!("Exchange initialized with BTC_USD");
-    let mut rt = Runtime::new()?;
+    let rt = Runtime::new()?;
     rt.block_on(exchange.run())?;
     Ok(())
 }
