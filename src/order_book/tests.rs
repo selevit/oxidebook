@@ -59,8 +59,8 @@ fn place_sell_order_and_fill_it_fully() {
     let remaining_buys = vec![initial_orders[2]];
 
     TestCase {
-        placed_order,
         initial_orders,
+        placed_order,
         expected_deals,
         remaining_buys,
         remaining_sells,
@@ -89,8 +89,8 @@ fn place_sell_order_and_fill_it_partially() {
     let remaining_buys = vec![initial_orders[2]];
 
     TestCase {
-        placed_order,
         initial_orders,
+        placed_order,
         expected_deals,
         remaining_buys,
         remaining_sells,
@@ -188,8 +188,8 @@ fn place_buy_order_and_fill_it_partially_by_better_price() {
     let remaining_buys = vec![placed_order.with_volume(10)];
 
     TestCase {
-        placed_order,
         initial_orders,
+        placed_order,
         expected_deals,
         remaining_buys,
         remaining_sells,
@@ -217,8 +217,8 @@ fn place_buy_order_and_fill_it_partially_by_better_price_exceeding_sells() {
     let remaining_buys = vec![placed_order.with_volume(10)];
 
     TestCase {
-        placed_order,
         initial_orders,
+        placed_order,
         expected_deals,
         remaining_buys,
         remaining_sells,
