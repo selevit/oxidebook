@@ -1,29 +1,14 @@
 use anyhow::{Error, Result};
 use log::info;
-use std::{
-    collections::HashMap,
-    net::SocketAddr,
-    sync::{Arc, Mutex},
-};
+use std::net::SocketAddr;
 use tokio::runtime::Runtime;
 
-use futures_channel::mpsc::UnboundedSender;
-
 use crate::outbox::OutboxConsumer;
-use crate::protocol::OutboxEnvelope;
-use crate::transport::create_coon_pool;
+use crate::transport::create_conn_pool;
 use tokio::net::{TcpListener, TcpStream};
 use tokio::time::{self, Duration};
-use tungstenite::protocol::Message;
 
-type Tx = UnboundedSender<Message>;
-type PeerMap = Arc<Mutex<HashMap<SocketAddr, Tx>>>;
-
-async fn handle_connection(
-    peer_map: PeerMap,
-    raw_stream: TcpStream,
-    addr: SocketAddr,
-) {
+async fn handle_connection(raw_stream: TcpStream, addr: SocketAddr) {
     info!("Incoming TCP connection from: {}", addr);
 
     tokio_tungstenite::accept_async(raw_stream)
@@ -39,18 +24,20 @@ async fn handle_connection(
 async fn run_ws_market_data_api() -> Result<(), Error> {
     info!("Running WS Market Data API");
 
-    let pool = create_coon_pool()?;
-    // let consumer = OutboxConsumer::new("ws_market_data", pool.clone());
+    let pool = create_conn_pool()?;
+    let consumer = OutboxConsumer::new("ws_market_data", pool.clone());
 
-    // consumer.subscribe(Box::new(move |envelope| Box::pin(async move {
-    //     info!("Received an envelope from outbox: {:?},", envelope);
-    //     Ok(())
-    // }))).await?;
+    consumer
+        .subscribe(Box::new(move |envelope| {
+            Box::pin(async move {
+                info!("Received an envelope from outbox: {:?},", envelope);
+                Ok(())
+            })
+        }))
+        .await?;
 
     let addr = std::env::var("WS_MD_API_LISTEN_ADDR")
         .unwrap_or_else(|_| "127.0.0.1:4040".into());
-
-    let state = PeerMap::new(Mutex::new(HashMap::new()));
 
     // Create the event loop and TCP listener we'll accept connections on.
     let try_socket = TcpListener::bind(&addr).await;
@@ -59,7 +46,7 @@ async fn run_ws_market_data_api() -> Result<(), Error> {
 
     // Let's spawn the handling of each connection in a separate task.
     while let Ok((stream, addr)) = listener.accept().await {
-        tokio::spawn(handle_connection(state.clone(), stream, addr));
+        tokio::spawn(handle_connection(stream, addr));
     }
 
     Ok(())

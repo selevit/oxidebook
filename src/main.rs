@@ -35,7 +35,7 @@ async fn main() {
             let mut threads = vec![];
             threads.push(thread::spawn(core::run));
             threads.push(thread::spawn(rest_api::run));
-            threads.push(thread::spawn(ws_md_api::run));
+            // threads.push(thread::spawn(ws_md_api::run));
             for t in threads {
                 if let Err(e) = t.join().unwrap() {
                     panic!("{:?}", e)

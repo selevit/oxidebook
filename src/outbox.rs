@@ -1,19 +1,15 @@
 use crate::protocol;
 use crate::protocol::OutboxEnvelope;
 use anyhow::{Error, Result};
-use deadpool_lapin::{Config, Pool};
+use deadpool_lapin::Pool;
 use futures_util::stream::StreamExt;
 use lapin::options::{BasicAckOptions, BasicConsumeOptions};
 use lapin::types::FieldTable;
 use log::info;
 use std::future::Future;
 use std::pin::Pin;
-use std::sync::Arc;
 
 const OUTBOX_QUEUE_NAME: &str = "outbox";
-//type OutboxHandler = Box<dyn Fn(OutboxEnvelope) -> dyn Future<Output = Result<(), Error>>>;
-// pub type OutboxHandler =
-// Box<dyn Fn(OutboxEnvelope) -> Box<dyn Future<Output = Result<(), Error>>>>;
 
 pub type OutboxHandlerResult = Pin<Box<dyn Future<Output = Result<(), Error>>>>;
 pub type OutboxHandler = Box<dyn Fn(OutboxEnvelope) -> OutboxHandlerResult>;

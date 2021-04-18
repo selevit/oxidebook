@@ -1,18 +1,15 @@
 extern crate futures;
 extern crate tokio;
 use crate::order_book::Deal;
-use crate::outbox::{OutboxConsumer, OutboxHandler};
+use crate::outbox::OutboxConsumer;
 use crate::protocol;
 use crate::protocol::OutboxEnvelope;
-use crate::transport::create_coon_pool;
+use crate::transport::create_conn_pool;
 use anyhow::{Error, Result};
 use futures::join;
 use serde_derive::{Deserialize, Serialize};
 use std::cell::RefCell;
 use std::convert::Infallible;
-use std::future::Future;
-use std::pin::Pin;
-use std::str::FromStr;
 use std::sync::Arc;
 use tokio::runtime::Runtime;
 use tokio::sync::oneshot;
@@ -21,18 +18,13 @@ use tokio::sync::Mutex;
 use uuid::Uuid;
 use warp::Filter;
 
-use futures_util::stream::StreamExt;
-use lapin::types::FieldTable;
-use lapin::{
-    options::{BasicAckOptions, BasicConsumeOptions, BasicPublishOptions},
-    BasicProperties,
-};
+use lapin::{options::BasicPublishOptions, BasicProperties};
 use std::collections::HashMap;
 use std::option::Option;
 
 use log::info;
 
-use deadpool_lapin::{Config, Pool};
+use deadpool_lapin::Pool;
 
 fn with_lapin_pool(
     pool: Pool,
@@ -209,68 +201,28 @@ async fn run_outbox_consumer(
     pool: Pool,
     results: Arc<OutboxResults>,
 ) -> Result<()> {
-    let consumer = OutboxConsumer::new("ws_api", pool.clone());
-    let outbox_handler: OutboxHandler = Box::new(move |envelope| {
-        let results = results.clone();
-        Box::pin(async move {
-            info!("Received an envelope from outbox: {:?},", &envelope);
-            info!("Correlation id: {}", envelope.inbox_correlation_id);
-            // TODO: think about proper routing with many API consumers
-            let has_id = results.has_id(envelope.inbox_correlation_id).await;
-            if has_id {
-                results
-                    .send_result(envelope.inbox_correlation_id, envelope)
-                    .await;
-            }
-            Ok(())
-        })
-    });
+    let consumer = OutboxConsumer::new("rest_api", pool.clone());
 
-    consumer.subscribe(outbox_handler).await?;
-
-    // let conn = pool.get().await?;
-    // let channel = conn.create_channel().await?;
-
-    // let mut consumer = channel
-    //     .clone()
-    //     .basic_consume(
-    //         "outbox",
-    //         "rest_api",
-    //         BasicConsumeOptions::default(),
-    //         FieldTable::default(),
-    //     )
-    //     .await?;
-
-    // info!("Starting consuming outbox");
-
-    // while let Some(delivery) = consumer.next().await {
-    //     let delivery = delivery.expect("error caught in the outbox consumer");
-    //     let outbox_env: protocol::OutboxEnvelope =
-    //         serde_json::from_slice(&delivery.data)?;
-    //     info!("Received an envelope from outbox: {:?},", &outbox_env);
-
-    //     let correlation_id =
-    //         delivery.properties.correlation_id().as_ref().unwrap().as_str();
-    //     let msg_id = Uuid::from_str(correlation_id)?;
-
-    //     info!("Correlation id: {}", msg_id);
-
-    //     // TODO: think about proper routing with many API consumers
-    //     if outbox_results.has_id(msg_id).await {
-    //         outbox_results.send_result(msg_id, outbox_env).await;
-
-    //         channel
-    //             .basic_ack(delivery.delivery_tag, BasicAckOptions::default())
-    //             .await?;
-    //     }
-    // }
+    consumer
+        .subscribe(Box::new(move |envelope| {
+            let results = results.clone();
+            Box::pin(async move {
+                info!("Received an envelope from outbox: {:?},", &envelope);
+                if results.has_id(envelope.inbox_correlation_id).await {
+                    results
+                        .send_result(envelope.inbox_correlation_id, envelope)
+                        .await;
+                }
+                Ok(())
+            })
+        }))
+        .await?;
 
     Ok(())
 }
 
 async fn _run() -> Result<(), Error> {
-    let cfg = Config::from_env("AMQP")?;
-    let pool = cfg.create_pool();
+    let pool = create_conn_pool()?;
     let r = Arc::new(OutboxResults::new());
 
     info!("Running REST API server");
