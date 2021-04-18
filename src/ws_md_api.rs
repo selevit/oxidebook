@@ -9,17 +9,15 @@ use tokio::runtime::Runtime;
 
 use futures_channel::mpsc::UnboundedSender;
 
-use tokio::net::{TcpListener, TcpStream};
-use tungstenite::protocol::Message;
 use crate::outbox::OutboxConsumer;
 use crate::protocol::OutboxEnvelope;
 use crate::transport::create_coon_pool;
+use tokio::net::{TcpListener, TcpStream};
+use tokio::time::{self, Duration};
+use tungstenite::protocol::Message;
 
 type Tx = UnboundedSender<Message>;
 type PeerMap = Arc<Mutex<HashMap<SocketAddr, Tx>>>;
-use std::time::Duration;
-
-use async_std::task;
 
 async fn handle_connection(
     peer_map: PeerMap,
@@ -34,7 +32,7 @@ async fn handle_connection(
     info!("WebSocket connection established: {}", addr);
 
     loop {
-        task::sleep(Duration::from_secs(1)).await;
+        time::sleep(Duration::from_secs(1)).await;
     }
 }
 
@@ -56,7 +54,7 @@ async fn run_ws_market_data_api() -> Result<(), Error> {
 
     // Create the event loop and TCP listener we'll accept connections on.
     let try_socket = TcpListener::bind(&addr).await;
-    let mut listener = try_socket.expect("Failed to bind");
+    let listener = try_socket.expect("Failed to bind");
     info!("Listening on: {}", addr);
 
     // Let's spawn the handling of each connection in a separate task.
@@ -68,7 +66,7 @@ async fn run_ws_market_data_api() -> Result<(), Error> {
 }
 
 pub fn run() -> Result<()> {
-    let mut rt = Runtime::new()?;
+    let rt = Runtime::new()?;
     rt.block_on(run_ws_market_data_api())?;
     Ok(())
 }

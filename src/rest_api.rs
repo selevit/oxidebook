@@ -1,13 +1,17 @@
 extern crate futures;
 extern crate tokio;
 use crate::order_book::Deal;
+use crate::outbox::{OutboxConsumer, OutboxHandler};
 use crate::protocol;
 use crate::protocol::OutboxEnvelope;
+use crate::transport::create_coon_pool;
 use anyhow::{Error, Result};
 use futures::join;
 use serde_derive::{Deserialize, Serialize};
 use std::cell::RefCell;
 use std::convert::Infallible;
+use std::future::Future;
+use std::pin::Pin;
 use std::str::FromStr;
 use std::sync::Arc;
 use tokio::runtime::Runtime;
@@ -16,11 +20,6 @@ use tokio::sync::oneshot::Sender;
 use tokio::sync::Mutex;
 use uuid::Uuid;
 use warp::Filter;
-use crate::outbox::{OutboxConsumer,OutboxHandler};
-use crate::transport::create_coon_pool;
-use std::future::Future;
-use std::pin::Pin;
-use std::sync::Arc;
 
 use futures_util::stream::StreamExt;
 use lapin::types::FieldTable;
@@ -206,18 +205,27 @@ async fn cancel_order_handler(
     Ok(warp::reply::json(&CancelOrderResponse { status: cancel_order_status }))
 }
 
-async fn run_outbox_consumer(pool: Pool, results: Arc<OutboxResults>) -> Result<()> {
+async fn run_outbox_consumer(
+    pool: Pool,
+    results: Arc<OutboxResults>,
+) -> Result<()> {
     let consumer = OutboxConsumer::new("ws_api", pool.clone());
-    let outbox_handler: OutboxHandler = Box::new(|envelope| Box::pin(async {
-        info!("Received an envelope from outbox: {:?},", &envelope);
-        info!("Correlation id: {}", envelope.inbox_correlation_id);
-        // TODO: think about proper routing with many API consumers
-        let has_id = results.has_id(envelope.inbox_correlation_id).await; 
-        if has_id {
-            results.send_result(envelope.inbox_correlation_id, envelope).await;
-        }
-        Ok(())
-    }));
+    let outbox_handler: OutboxHandler = Box::new(move |envelope| {
+        let results = results.clone();
+        Box::pin(async move {
+            info!("Received an envelope from outbox: {:?},", &envelope);
+            info!("Correlation id: {}", envelope.inbox_correlation_id);
+            // TODO: think about proper routing with many API consumers
+            let has_id = results.has_id(envelope.inbox_correlation_id).await;
+            if has_id {
+                results
+                    .send_result(envelope.inbox_correlation_id, envelope)
+                    .await;
+            }
+            Ok(())
+        })
+    });
+
     consumer.subscribe(outbox_handler).await?;
 
     // let conn = pool.get().await?;

@@ -30,6 +30,7 @@ async fn main() {
         "core" => core::run().unwrap(),
         "rest-api" => rest_api::run().unwrap(),
         "ws-md-api" => ws_md_api::run().unwrap(),
+        #[allow(clippy::vec_init_then_push)]
         "all" => {
             let mut threads = vec![];
             threads.push(thread::spawn(core::run));
